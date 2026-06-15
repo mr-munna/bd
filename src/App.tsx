@@ -1327,6 +1327,7 @@ export default function App() {
   const [showSplash, setShowSplash] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('landing');
   const [quoteSubTab, setQuoteSubTab] = useState<'make' | 'view'>('make');
+  const [stockSubTab, setStockSubTab] = useState<'all' | 'tiles' | 'goods'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchBox, setShowSearchBox] = useState(false);
   const [marketingFilter, setMarketingFilter] = useState<string>('all');
@@ -3115,6 +3116,20 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
     );
   }, [stockItemsList, searchQuery]);
 
+  const displayedStockItems = useMemo(() => {
+    let baseList = (activeTab === 'search' || (showSearchBox && searchQuery.trim() !== '')) 
+      ? filteredStockItems 
+      : stockItemsList;
+    
+    if (stockSubTab === 'tiles') {
+      return baseList.filter(item => item.type === 'tile');
+    }
+    if (stockSubTab === 'goods') {
+      return baseList.filter(item => item.type === 'good');
+    }
+    return baseList;
+  }, [activeTab, showSearchBox, searchQuery, filteredStockItems, stockItemsList, stockSubTab]);
+
   // Filtering
   const filteredTiles = useMemo(() => {
     if (!searchQuery.trim()) return [];
@@ -4689,7 +4704,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   <Database className="w-6 h-6 text-black" />
                   {activeTab === 'stock' ? 'Stock Items' : 'Stock Results'}
                   <span className="text-xs font-black text-white bg-[#0f172a] px-3 py-1 rounded-full shadow-lg ml-2">
-                    {(activeTab === 'search' || (showSearchBox && searchQuery.trim() !== '')) ? filteredStockItems.length : stockItemsList.length}
+                    {displayedStockItems.length}
                   </span>
                   {showSearchBox && activeTab === 'stock' && (
                     <div className="relative w-60 ml-2 hidden md:block">
@@ -4706,6 +4721,42 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   <MobileSearchInput value={searchQuery} onChange={setSearchQuery} />
                 </h2>
               </div>
+
+              {activeTab === 'stock' && (
+                <div className="flex border-b border-gray-200">
+                  <button
+                    className={cn(
+                      "px-5 py-2.5 font-bold uppercase tracking-wider text-xs transition-colors flex items-center gap-2",
+                      stockSubTab === 'all' ? "border-b-2 border-rose-600 text-rose-600 font-extrabold" : "text-gray-500 hover:text-gray-850 hover:bg-gray-50"
+                    )}
+                    onClick={() => setStockSubTab('all')}
+                  >
+                    <Database className="w-4 h-4" />
+                    All Stock ({stockItemsList.length})
+                  </button>
+                  <button
+                    className={cn(
+                      "px-5 py-2.5 font-bold uppercase tracking-wider text-xs transition-colors flex items-center gap-2",
+                      stockSubTab === 'tiles' ? "border-b-2 border-emerald-600 text-emerald-600 font-extrabold" : "text-gray-500 hover:text-gray-850 hover:bg-gray-50"
+                    )}
+                    onClick={() => setStockSubTab('tiles')}
+                  >
+                    <Grid3X3 className="w-4 h-4" />
+                    All Tiles ({stockItemsList.filter(item => item.type === 'tile').length})
+                  </button>
+                  <button
+                    className={cn(
+                      "px-5 py-2.5 font-bold uppercase tracking-wider text-xs transition-colors flex items-center gap-2",
+                      stockSubTab === 'goods' ? "border-b-2 border-blue-600 text-blue-600 font-extrabold" : "text-gray-500 hover:text-gray-850 hover:bg-gray-50"
+                    )}
+                    onClick={() => setStockSubTab('goods')}
+                  >
+                    <Package className="w-4 h-4" />
+                    All Goods ({stockItemsList.filter(item => item.type === 'good').length})
+                  </button>
+                </div>
+              )}
+
               <div className={cn(
                 "rounded-2xl shadow-2xl border-2 overflow-auto max-h-[60vh] md:max-h-[70vh] overscroll-auto",
                 activeTab === 'search' ? "bg-white/50 backdrop-blur-3xl border-white/60" : "bg-white border-gray-200"
@@ -4724,7 +4775,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     </tr>
                   </thead>
                   <tbody>
-                    {((activeTab === 'search' || (showSearchBox && searchQuery.trim() !== '')) ? filteredStockItems : stockItemsList).map((item, index) => (
+                    {displayedStockItems.map((item, index) => (
                       <tr 
                         key={item.id} 
                         onClick={() => setHighlightedRow(item.id)}
