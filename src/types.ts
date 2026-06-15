@@ -14,6 +14,9 @@ export interface Tile {
   bananiSft: number;
   bananiPcs: number;
   bananiRemark: string;
+  dokhinkhanSft?: number;
+  dokhinkhanPcs?: number;
+  dokhinkhanRemark?: string;
   imageUrl: string;
   deleted?: boolean;
 }

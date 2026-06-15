@@ -19,9 +19,9 @@
         "bananiSft": { "type": "number", "description": "Banani SFT" },
         "bananiPcs": { "type": "number", "description": "Banani PCS" },
         "bananiRemark": { "type": "string", "description": "Banani Remark" },
-        "dokhinkhanSft": { "type": "number", "description": "Dokhinkhan SFT" },
-        "dokhinkhanPcs": { "type": "number", "description": "Dokhinkhan PCS" },
-        "dokhinkhanRemark": { "type": "string", "description": "Dokhinkhan Remark" },
+        "dokhinkhanSft": { "type": "number", "description": "Bonorupa 2 SFT" },
+        "dokhinkhanPcs": { "type": "number", "description": "Bonorupa 2 PCS" },
+        "dokhinkhanRemark": { "type": "string", "description": "Bonorupa 2 Remark" },
         "imageUrl": { "type": "string", "description": "Image URL" }
       },
       "required": ["name", "brand"]
@@ -34,8 +34,8 @@
         "brand": { "type": "string", "description": "Brand name" },
         "code": { "type": "string", "description": "Product code" },
         "description": { "type": "string", "description": "Product description" },
-        "dokhinkhan": { "type": "number", "description": "Dokhinkhan quantity" },
-        "dokhinkhanRemark": { "type": "string", "description": "Dokhinkhan Remark" },
+        "dokhinkhan": { "type": "number", "description": "Bonorupa 2 quantity" },
+        "dokhinkhanRemark": { "type": "string", "description": "Bonorupa 2 Remark" },
         "bonorupa": { "type": "number", "description": "Bonorupa quantity" },
         "bonorupaRemark": { "type": "string", "description": "Bonorupa Remark" },
         "banani": { "type": "number", "description": "Banani quantity" },

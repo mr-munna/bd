@@ -1970,6 +1970,13 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
     }
   }, [activeTab, isAdmin, isSupremeAdmin, isAuthReady, user]);
 
+  // For regular users, default stockSubTab to 'tiles' and prevent selecting 'all'
+  useEffect(() => {
+    if (isAuthReady && !isAdmin && stockSubTab === 'all') {
+      setStockSubTab('tiles');
+    }
+  }, [isAdmin, stockSubTab, isAuthReady]);
+
   // Auth listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
@@ -2230,6 +2237,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
       const diaBariPcs = Number(data.diaBariPcs || 0);
       const bonorupaPcs = Number(data.bonorupaPcs || 0);
       const bananiPcs = Number(data.bananiPcs || 0);
+      const dokhinkhanPcs = Number(data.dokhinkhanPcs || 0);
 
       const calculateSft = (s: string, p: number) => {
         const parts = s.toLowerCase().split('x');
@@ -2243,9 +2251,10 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
       data.diaBariSft = calculateSft(sizeStr, diaBariPcs);
       data.bonorupaSft = calculateSft(sizeStr, bonorupaPcs);
       data.bananiSft = calculateSft(sizeStr, bananiPcs);
+      data.dokhinkhanSft = calculateSft(sizeStr, dokhinkhanPcs);
       
-      data.totalSft = Number((data.diaBariSft + data.bonorupaSft + data.bananiSft).toFixed(2));
-      data.totalPcs = diaBariPcs + bonorupaPcs + bananiPcs;
+      data.totalSft = Number((data.diaBariSft + data.bonorupaSft + data.bananiSft + data.dokhinkhanSft).toFixed(2));
+      data.totalPcs = diaBariPcs + bonorupaPcs + bananiPcs + dokhinkhanPcs;
     }
 
     try {
@@ -2727,6 +2736,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                 const diaBariPcs = Number(row['PCS'] || row['Pcs'] || 0);
                 const bonorupaPcs = Number(row['PCS_1'] || 0);
                 const bananiPcs = Number(row['PCS_2'] || 0);
+                const dokhinkhanPcs = Number(row['PCS_3'] || row['PCS_DOKHINKHAN'] || row['PCS_Dokhinkhan'] || row['PCS_Bonorupa2'] || row['PCS_Bonorupa 2'] || 0);
 
                 const calculateSft = (s: string, p: number) => {
                   const parts = s.toLowerCase().split('x');
@@ -2740,13 +2750,14 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                 const diaBariSft = calculateSft(sizeStr, diaBariPcs);
                 const bonorupaSft = calculateSft(sizeStr, bonorupaPcs);
                 const bananiSft = calculateSft(sizeStr, bananiPcs);
+                const dokhinkhanSft = calculateSft(sizeStr, dokhinkhanPcs);
 
                 await addDoc(collection(db, 'tiles'), {
                   name: String(row['NAME'] || row['Name'] || row['name'] || ''),
                   size: sizeStr,
                   brand: String(row['BRAND'] || row['Brand'] || row['brand'] || ''),
-                  totalSft: Number((diaBariSft + bonorupaSft + bananiSft).toFixed(2)),
-                  totalPcs: diaBariPcs + bonorupaPcs + bananiPcs,
+                  totalSft: Number((diaBariSft + bonorupaSft + bananiSft + dokhinkhanSft).toFixed(2)),
+                  totalPcs: diaBariPcs + bonorupaPcs + bananiPcs + dokhinkhanPcs,
                   diaBariSft: diaBariSft,
                   diaBariPcs: diaBariPcs,
                   diaBariRemark: String(row['REMARK'] || row['Remark'] || ''),
@@ -2756,6 +2767,9 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   bananiSft: bananiSft,
                   bananiPcs: bananiPcs,
                   bananiRemark: String(row['REMARK_2'] || row['REMARK'] || ''),
+                  dokhinkhanSft: dokhinkhanSft,
+                  dokhinkhanPcs: dokhinkhanPcs,
+                  dokhinkhanRemark: String(row['REMARK_3'] || row['REMARK_Dokhinkhan'] || row['REMARK_Bonorupa2'] || row['REMARK_Bonorupa 2'] || ''),
                   imageUrl: String(row['IMAGE'] || row['Image'] || row['image'] || '')
                 });
                 counts.tiles++;
@@ -2769,7 +2783,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   brand: String(row['BRAND'] || row['Brand'] || row['brand'] || ''),
                   code: String(row['CODE'] || row['Code'] || row['code'] || ''),
                   description: String(row['DISCRIPTION'] || row['Description'] || row['description'] || ''),
-                  dokhinkhan: Number(row['DOKHINKHAN'] || row['Dokhinkhan'] || 0),
+                  dokhinkhan: Number(row['BONORUPA 2'] || row['Bonorupa 2'] || row['BONORUPA_2'] || row['Bonorupa_2'] || row['DOKHINKHAN'] || row['Dokhinkhan'] || 0),
                   dokhinkhanRemark: String(row['REMARK'] || row['Remark'] || ''),
                   bonorupa: Number(row['BONORUPA'] || row['Bonorupa'] || 0),
                   bonorupaRemark: String(row['REMARK_1'] || row['REMARK'] || ''),
@@ -4343,7 +4357,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     masterSubTab === 'tiles' ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
                   )}
                 >
-                  <span>All Tiles</span>
+                  <span>Tiles Items</span>
                   <span className={cn(
                     "text-xs px-1.5 py-0.5 rounded-full font-bold transition-colors",
                     masterSubTab === 'tiles' ? "bg-blue-100 text-blue-800" : "bg-gray-200 text-gray-500"
@@ -4358,7 +4372,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     masterSubTab === 'goods' ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
                   )}
                 >
-                  <span>All Goods</span>
+                  <span>Sanitary Items</span>
                   <span className={cn(
                     "text-xs px-1.5 py-0.5 rounded-full font-bold transition-colors",
                     masterSubTab === 'goods' ? "bg-blue-100 text-blue-800" : "bg-gray-200 text-gray-500"
@@ -4373,7 +4387,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     masterSubTab === 'tools' ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
                   )}
                 >
-                  <span>All Tools</span>
+                  <span>Barobi Tools</span>
                   <span className={cn(
                     "text-xs px-1.5 py-0.5 rounded-full font-bold transition-colors",
                     masterSubTab === 'tools' ? "bg-blue-100 text-blue-800" : "bg-gray-200 text-gray-500"
@@ -4724,16 +4738,18 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
 
               {activeTab === 'stock' && (
                 <div className="flex border-b border-gray-200">
-                  <button
-                    className={cn(
-                      "px-5 py-2.5 font-bold uppercase tracking-wider text-xs transition-colors flex items-center gap-2",
-                      stockSubTab === 'all' ? "border-b-2 border-rose-600 text-rose-600 font-extrabold" : "text-gray-500 hover:text-gray-850 hover:bg-gray-50"
-                    )}
-                    onClick={() => setStockSubTab('all')}
-                  >
-                    <Database className="w-4 h-4" />
-                    All Stock ({stockItemsList.length})
-                  </button>
+                  {isAdmin && (
+                    <button
+                      className={cn(
+                        "px-5 py-2.5 font-bold uppercase tracking-wider text-xs transition-colors flex items-center gap-2",
+                        stockSubTab === 'all' ? "border-b-2 border-rose-600 text-rose-600 font-extrabold" : "text-gray-500 hover:text-gray-850 hover:bg-gray-50"
+                      )}
+                      onClick={() => setStockSubTab('all')}
+                    >
+                      <Database className="w-4 h-4" />
+                      All Stock ({stockItemsList.length})
+                    </button>
+                  )}
                   <button
                     className={cn(
                       "px-5 py-2.5 font-bold uppercase tracking-wider text-xs transition-colors flex items-center gap-2",
@@ -4742,7 +4758,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     onClick={() => setStockSubTab('tiles')}
                   >
                     <Grid3X3 className="w-4 h-4" />
-                    All Tiles ({stockItemsList.filter(item => item.type === 'tile').length})
+                    Tiles Items ({stockItemsList.filter(item => item.type === 'tile').length})
                   </button>
                   <button
                     className={cn(
@@ -4752,7 +4768,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     onClick={() => setStockSubTab('goods')}
                   >
                     <Package className="w-4 h-4" />
-                    All Goods ({stockItemsList.filter(item => item.type === 'good').length})
+                    Sanitary Items ({stockItemsList.filter(item => item.type === 'good').length})
                   </button>
                 </div>
               )}
@@ -4827,7 +4843,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   activeTab === 'search' ? "font-black text-black" : "font-bold text-gray-900"
                 )}>
                   <Grid3X3 className={cn("w-6 h-6", activeTab === 'search' ? "text-black" : "text-[#0f172a]")} />
-                  {(activeTab === 'master' || activeTab === 'master_sheet') ? 'All Tiles' : 'Tiles Results'}
+                  {(activeTab === 'master' || activeTab === 'master_sheet') ? 'Tiles Items' : 'Tiles Results'}
                   <span className={cn(
                     "px-2 py-1 rounded-full",
                     activeTab === 'search' ? "text-xs font-black text-white bg-black shadow-lg" : "text-sm font-normal text-gray-500 bg-gray-100"
@@ -4976,6 +4992,9 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                       <TableHeader align="center" className={cn(activeTab === 'search' && "bg-slate-200/50")}>Banani (SFT)</TableHeader>
                       <TableHeader align="center" className={cn(activeTab === 'search' && "bg-slate-200/50")}>PCS_2</TableHeader>
                       <TableHeader className={cn(activeTab === 'search' && "bg-slate-200/50")}>Remark_2</TableHeader>
+                      <TableHeader align="center" className={cn(activeTab === 'search' && "bg-slate-200/50")}>Bonorupa 2 (SFT)</TableHeader>
+                      <TableHeader align="center" className={cn(activeTab === 'search' && "bg-slate-200/50")}>PCS_3</TableHeader>
+                      <TableHeader className={cn(activeTab === 'search' && "bg-slate-200/50")}>Remark_3</TableHeader>
                       {isAdmin && (activeTab === 'master' || activeTab === 'master_sheet') && highlightedRow && activeTab !== 'master' && <TableHeader className={cn(activeTab === 'search' && "bg-slate-200/50")}>Action</TableHeader>}
                     </tr>
                   </thead>
@@ -5171,6 +5190,27 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                               />
                             ) : tile.bananiRemark}
                           </TableCell>
+                          <TableCell align="center" className={cn("border-slate-300", isOutOfStock ? "text-red-950 font-semibold" : getCellColor(tile.dokhinkhanSft || 0))}>{Number((tile.dokhinkhanSft || 0).toFixed(2))}</TableCell>
+                          <TableCell align="center" className={cn("border-slate-300", isOutOfStock ? "text-red-950 font-semibold" : getCellColor(tile.dokhinkhanPcs || 0))}>
+                            {isEditing ? (
+                              <input 
+                                type="number"
+                                className="w-full h-full min-w-[80px] min-h-[44px] px-4 py-3 bg-blue-50/50 border-2 border-transparent focus:border-blue-500 outline-none m-0 text-center text-inherit text-sm resize-none rounded-none editing-input-active" 
+                                value={editData.dokhinkhanPcs || 0} 
+                                onChange={e => setEditData({ ...editData, dokhinkhanPcs: Number(e.target.value) || 0 })}
+                              />
+                            ) : Math.round(tile.dokhinkhanPcs || 0)}
+                          </TableCell>
+                          <TableCell className={cn("text-xs border-slate-300", isOutOfStock ? "text-red-950/80 font-medium" : "text-gray-800 font-normal italic")}>
+                            {isEditing ? (
+                              <textarea 
+                                className="w-full h-full min-h-[44px] px-4 py-3 bg-blue-50/50 border-2 border-transparent focus:border-blue-500 outline-none m-0 text-inherit text-sm resize-none rounded-none editing-input-active" 
+                                value={editData.dokhinkhanRemark || ''} 
+                                onChange={e => setEditData({ ...editData, dokhinkhanRemark: e.target.value })}
+                                onInput={e => { e.currentTarget.style.height = 'auto'; e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px'; }}
+                              />
+                            ) : tile.dokhinkhanRemark}
+                          </TableCell>
                            {isAdmin && (activeTab === 'master' || activeTab === 'master_sheet') && (highlightedRow === tile.id || isEditing) && activeTab !== 'master' && (
                              <TableCell>
                                <div className="flex gap-2">
@@ -5247,7 +5287,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   activeTab === 'search' ? "font-black text-black" : "font-bold text-gray-900"
                 )}>
                   <Package className={cn("w-6 h-6", activeTab === 'search' ? "text-black" : "text-[#0f172a]")} />
-                  {(activeTab === 'master' || activeTab === 'master_sheet') ? 'All Goods' : 'Goods Results'}
+                  {(activeTab === 'master' || activeTab === 'master_sheet') ? 'Sanitary Items' : 'Sanitary Results'}
                   <span className={cn(
                     "px-3 py-1 rounded-full",
                     activeTab === 'search' ? "text-xs font-black text-white bg-black shadow-lg" : "text-sm font-normal text-gray-500 bg-gray-100"
@@ -5377,7 +5417,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                       <TableHeader className={cn(activeTab === 'search' && "bg-slate-200/50")}>Remark_1</TableHeader>
                       <TableHeader align="center" className={cn(activeTab === 'search' && "bg-slate-200/50")}>Banani</TableHeader>
                       <TableHeader className={cn(activeTab === 'search' && "bg-slate-200/50")}>Remark_2</TableHeader>
-                      <TableHeader align="center" className={cn(activeTab === 'search' && "bg-slate-200/50")}>Dokhinkhan</TableHeader>
+                      <TableHeader align="center" className={cn(activeTab === 'search' && "bg-slate-200/50")}>Bonorupa 2</TableHeader>
                       <TableHeader className={cn(activeTab === 'search' && "bg-slate-200/50")}>Remark</TableHeader>
 
                       {isAdmin && (activeTab === 'master' || activeTab === 'master_sheet') && (highlightedRow || editingId !== null) && activeTab !== 'master' && <TableHeader className={cn(activeTab === 'search' && "bg-slate-200/50")}>Action</TableHeader>}
@@ -5631,7 +5671,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
               <div className="flex items-center justify-between">
                 <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
                   <Wrench className="w-6 h-6 text-[#0f172a]" />
-                  {(activeTab === 'master' || activeTab === 'master_sheet') ? 'All Tools' : 'Tools Results'}
+                  {(activeTab === 'master' || activeTab === 'master_sheet') ? 'Barobi Tools' : 'Barobi Tools Results'}
                   <span className="text-sm font-normal text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
                     {(activeTab === 'search' || (showSearchBox && searchQuery.trim() !== '') ? filteredTools : tools).length}
                   </span>
@@ -7403,6 +7443,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                       const diaBariPcs = Number(data.diaBariPcs || 0);
                       const bonorupaPcs = Number(data.bonorupaPcs || 0);
                       const bananiPcs = Number(data.bananiPcs || 0);
+                      const dokhinkhanPcs = Number(data.dokhinkhanPcs || 0);
 
                       const calculateSft = (s: string, p: number) => {
                         const parts = s.toLowerCase().split('x');
@@ -7416,11 +7457,12 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                       data.diaBariSft = calculateSft(sizeStr, diaBariPcs);
                       data.bonorupaSft = calculateSft(sizeStr, bonorupaPcs);
                       data.bananiSft = calculateSft(sizeStr, bananiPcs);
+                      data.dokhinkhanSft = calculateSft(sizeStr, dokhinkhanPcs);
                       
-                      // total sft = diabari sft + bonorupa sft + banani sft
-                      data.totalSft = Number((data.diaBariSft + data.bonorupaSft + data.bananiSft).toFixed(2));
-                      // total pcs = diabari pcs + bonorupa pcs + banani pcs
-                      data.totalPcs = diaBariPcs + bonorupaPcs + bananiPcs;
+                      // total sft = diabari sft + bonorupa sft + banani sft + dokhinkhan sft
+                      data.totalSft = Number((data.diaBariSft + data.bonorupaSft + data.bananiSft + data.dokhinkhanSft).toFixed(2));
+                      // total pcs = diabari pcs + bonorupa pcs + banani pcs + dokhinkhan pcs
+                      data.totalPcs = diaBariPcs + bonorupaPcs + bananiPcs + dokhinkhanPcs;
                     }
 
                     // Stock validation for bookedItems
@@ -7512,6 +7554,8 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                       <Input label="Bonorupa Remark_1" name="bonorupaRemark" defaultValue={editingItem?.item.bonorupaRemark} />
                       <Input label="Banani PCS_2" name="bananiPcs" type="number" defaultValue={editingItem?.item.bananiPcs} />
                       <Input label="Banani Remark_2" name="bananiRemark" defaultValue={editingItem?.item.bananiRemark} />
+                      <Input label="Bonorupa 2 PCS" name="dokhinkhanPcs" type="number" defaultValue={editingItem?.item.dokhinkhanPcs} />
+                      <Input label="Bonorupa 2 Remark" name="dokhinkhanRemark" defaultValue={editingItem?.item.dokhinkhanRemark} />
                       <div className="flex flex-col gap-1.5">
                         <label className="text-sm font-medium text-gray-700">Image File</label>
                         <input type="file" name="imageFile" accept="image/*" className="text-sm" />
@@ -7529,8 +7573,8 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                       <Input label="Bonorupa Remark" name="bonorupaRemark" defaultValue={editingItem?.item.bonorupaRemark} />
                       <Input label="Banani Qty_1" name="banani" type="number" defaultValue={editingItem?.item.banani} />
                       <Input label="Banani Remark_1" name="bananiRemark" defaultValue={editingItem?.item.bananiRemark} />
-                      <Input label="Dokhinkhan Qty" name="dokhinkhan" type="number" defaultValue={editingItem?.item.dokhinkhan} />
-                      <Input label="Dokhinkhan Remark" name="dokhinkhanRemark" defaultValue={editingItem?.item.dokhinkhanRemark} />
+                      <Input label="Bonorupa 2 Qty" name="dokhinkhan" type="number" defaultValue={editingItem?.item.dokhinkhan} />
+                      <Input label="Bonorupa 2 Remark" name="dokhinkhanRemark" defaultValue={editingItem?.item.dokhinkhanRemark} />
                       <div className="flex flex-col gap-1.5 sm:col-span-2">
                         <label className="text-sm font-medium text-gray-700">Image File</label>
                         <input type="file" name="imageFile" accept="image/*" className="text-sm" />

@@ -240,12 +240,17 @@ export function SalesManager({
             if (bananiSft >= remSft) { bananiSft -= remSft; remSft = 0; } else { remSft -= bananiSft; bananiSft = 0; }
             if (bananiPcs >= remPcs) { bananiPcs -= remPcs; remPcs = 0; } else { remPcs -= bananiPcs; bananiPcs = 0; }
 
+            let dokhinkhanSft = tileMatch.dokhinkhanSft || 0;
+            let dokhinkhanPcs = tileMatch.dokhinkhanPcs || 0;
+            if (dokhinkhanSft >= remSft) { dokhinkhanSft -= remSft; remSft = 0; } else { remSft -= dokhinkhanSft; dokhinkhanSft = 0; }
+            if (dokhinkhanPcs >= remPcs) { dokhinkhanPcs -= remPcs; remPcs = 0; } else { remPcs -= dokhinkhanPcs; dokhinkhanPcs = 0; }
+
             // If there's still remainder, just force negative on diaBari (default)
             if (remSft > 0) diaBariSft -= remSft;
             if (remPcs > 0) diaBariPcs -= remPcs;
 
-            const newTotalSft = Number((diaBariSft + bonorupaSft + bananiSft).toFixed(2));
-            const newTotalPcs = diaBariPcs + bonorupaPcs + bananiPcs;
+            const newTotalSft = Number((diaBariSft + bonorupaSft + bananiSft + dokhinkhanSft).toFixed(2));
+            const newTotalPcs = diaBariPcs + bonorupaPcs + bananiPcs + dokhinkhanPcs;
 
             batch.update(tileRef, { 
                 diaBariSft: Number(diaBariSft.toFixed(2)), 
@@ -254,6 +259,8 @@ export function SalesManager({
                 bonorupaPcs: Math.round(bonorupaPcs),
                 bananiSft: Number(bananiSft.toFixed(2)),
                 bananiPcs: Math.round(bananiPcs),
+                dokhinkhanSft: Number(dokhinkhanSft.toFixed(2)),
+                dokhinkhanPcs: Math.round(dokhinkhanPcs),
                 totalSft: newTotalSft,
                 totalPcs: newTotalPcs
             });
