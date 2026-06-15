@@ -38,9 +38,9 @@ service cloud.firestore {
     }
 
     function isSupremeAdmin() {
-      return isEmailVerified() && (
+      return isSignedIn() && (
         request.auth.token.email == 'bijoymahmudmunna@gmail.com' ||
-        (userExists(request.auth.uid) && getUserData(request.auth.uid).role == 'supreme_admin')
+        (isEmailVerified() && userExists(request.auth.uid) && getUserData(request.auth.uid).role == 'supreme_admin')
       );
     }
 
@@ -53,11 +53,22 @@ service cloud.firestore {
     }
 
     function isApproved() {
-      return isSupremeAdmin() || (isEmailVerified() && userExists(request.auth.uid) && getUserData(request.auth.uid).status == 'approved');
+      return isSupremeAdmin() || (isEmailVerified() && userExists(request.auth.uid) && (
+        getUserData(request.auth.uid).status == 'approved' ||
+        getUserData(request.auth.uid).role == 'admin' ||
+        getUserData(request.auth.uid).role == 'super_admin' ||
+        getUserData(request.auth.uid).role == 'supreme_admin'
+      ));
     }
 
     function isPendingOrApproved() {
-      return isSupremeAdmin() || (isEmailVerified() && userExists(request.auth.uid) && (getUserData(request.auth.uid).status == 'approved' || getUserData(request.auth.uid).status == 'pending'));
+      return isSupremeAdmin() || (isEmailVerified() && userExists(request.auth.uid) && (
+        getUserData(request.auth.uid).status == 'approved' ||
+        getUserData(request.auth.uid).status == 'pending' ||
+        getUserData(request.auth.uid).role == 'admin' ||
+        getUserData(request.auth.uid).role == 'super_admin' ||
+        getUserData(request.auth.uid).role == 'supreme_admin'
+      ));
     }
 
     // --- Entity Validations (Phase 4: Drafting) ---
@@ -78,45 +89,45 @@ service cloud.firestore {
       return data.keys().hasAll(['name', 'brand']) &&
              data.name is string && data.name.size() <= 200 &&
              data.brand is string && data.brand.size() <= 100 &&
-             (!('size' in data) || (data.size is string && data.size.size() <= 50)) &&
-             (!('totalSft' in data) || data.totalSft is number) &&
-             (!('totalPcs' in data) || data.totalPcs is number) &&
-             (!('diaBariSft' in data) || data.diaBariSft is number) &&
-             (!('diaBariPcs' in data) || data.diaBariPcs is number) &&
-             (!('diaBariRemark' in data) || (data.diaBariRemark is string && data.diaBariRemark.size() <= 500)) &&
-             (!('bonorupaSft' in data) || data.bonorupaSft is number) &&
-             (!('bonorupaPcs' in data) || data.bonorupaPcs is number) &&
-             (!('bonorupaRemark' in data) || (data.bonorupaRemark is string && data.bonorupaRemark.size() <= 500)) &&
-             (!('bananiSft' in data) || data.bananiSft is number) &&
-             (!('bananiPcs' in data) || data.bananiPcs is number) &&
-             (!('bananiRemark' in data) || (data.bananiRemark is string && data.bananiRemark.size() <= 500)) &&
-             (!('dokhinkhanSft' in data) || data.dokhinkhanSft is number) &&
-             (!('dokhinkhanPcs' in data) || data.dokhinkhanPcs is number) &&
-             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 1000000)) &&
-             (!('deleted' in data) || data.deleted is bool);
+             (!('size' in data) || data.size == null || (data.size is string && data.size.size() <= 50)) &&
+             (!('totalSft' in data) || data.totalSft == null || data.totalSft is number) &&
+             (!('totalPcs' in data) || data.totalPcs == null || data.totalPcs is number) &&
+             (!('diaBariSft' in data) || data.diaBariSft == null || data.diaBariSft is number) &&
+             (!('diaBariPcs' in data) || data.diaBariPcs == null || data.diaBariPcs is number) &&
+             (!('diaBariRemark' in data) || data.diaBariRemark == null || (data.diaBariRemark is string && data.diaBariRemark.size() <= 500)) &&
+             (!('bonorupaSft' in data) || data.bonorupaSft == null || data.bonorupaSft is number) &&
+             (!('bonorupaPcs' in data) || data.bonorupaPcs == null || data.bonorupaPcs is number) &&
+             (!('bonorupaRemark' in data) || data.bonorupaRemark == null || (data.bonorupaRemark is string && data.bonorupaRemark.size() <= 500)) &&
+             (!('bananiSft' in data) || data.bananiSft == null || data.bananiSft is number) &&
+             (!('bananiPcs' in data) || data.bananiPcs == null || data.bananiPcs is number) &&
+             (!('bananiRemark' in data) || data.bananiRemark == null || (data.bananiRemark is string && data.bananiRemark.size() <= 500)) &&
+             (!('dokhinkhanSft' in data) || data.dokhinkhanSft == null || data.dokhinkhanSft is number) &&
+             (!('dokhinkhanPcs' in data) || data.dokhinkhanPcs == null || data.dokhinkhanPcs is number) &&
+             (!('imageUrl' in data) || data.imageUrl == null || (data.imageUrl is string && data.imageUrl.size() <= 1000000)) &&
+             (!('deleted' in data) || data.deleted == null || data.deleted is bool);
     }
 
     function isValidGood(data) {
       return data.keys().hasAll(['code']) &&
              data.code is string && data.code.size() <= 100 &&
-             (!('brand' in data) || (data.brand is string && data.brand.size() <= 100)) &&
-             (!('description' in data) || (data.description is string && data.description.size() <= 1000)) &&
-             (!('dokhinkhan' in data) || data.dokhinkhan is number) &&
-             (!('dokhinkhanRemark' in data) || (data.dokhinkhanRemark is string && data.dokhinkhanRemark.size() <= 500)) &&
-             (!('bonorupa' in data) || data.bonorupa is number) &&
-             (!('bonorupaRemark' in data) || (data.bonorupaRemark is string && data.bonorupaRemark.size() <= 500)) &&
-             (!('banani' in data) || data.banani is number) &&
-             (!('bananiRemark' in data) || (data.bananiRemark is string && data.bananiRemark.size() <= 500)) &&
-             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 1000000)) &&
-             (!('deleted' in data) || data.deleted is bool);
+             (!('brand' in data) || data.brand == null || (data.brand is string && data.brand.size() <= 100)) &&
+             (!('description' in data) || data.description == null || (data.description is string && data.description.size() <= 1000)) &&
+             (!('dokhinkhan' in data) || data.dokhinkhan == null || data.dokhinkhan is number) &&
+             (!('dokhinkhanRemark' in data) || data.dokhinkhanRemark == null || (data.dokhinkhanRemark is string && data.dokhinkhanRemark.size() <= 500)) &&
+             (!('bonorupa' in data) || data.bonorupa == null || data.bonorupa is number) &&
+             (!('bonorupaRemark' in data) || data.bonorupaRemark == null || (data.bonorupaRemark is string && data.bonorupaRemark.size() <= 500)) &&
+             (!('banani' in data) || data.banani == null || data.banani is number) &&
+             (!('bananiRemark' in data) || data.bananiRemark == null || (data.bananiRemark is string && data.bananiRemark.size() <= 500)) &&
+             (!('imageUrl' in data) || data.imageUrl == null || (data.imageUrl is string && data.imageUrl.size() <= 1000000)) &&
+             (!('deleted' in data) || data.deleted == null || data.deleted is bool);
     }
 
     function isValidTool(data) {
       return data.keys().hasAll(['details', 'qty']) &&
              data.details is string && data.details.size() <= 200 &&
              data.qty is number &&
-             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 1000000)) &&
-             (!('deleted' in data) || data.deleted is bool);
+             (!('imageUrl' in data) || data.imageUrl == null || (data.imageUrl is string && data.imageUrl.size() <= 1000000)) &&
+             (!('deleted' in data) || data.deleted == null || data.deleted is bool);
     }
 
     function isValidBookedItem(data) {
@@ -124,8 +135,8 @@ service cloud.firestore {
              data.name is string && data.name.size() <= 200 &&
              data.code is string && data.code.size() <= 100 &&
              data.clientName is string && data.clientName.size() <= 100 &&
-             (!('qtySft' in data) || data.qtySft is number) &&
-             (!('qtyPcs' in data) || data.qtyPcs is number);
+             (!('qtySft' in data) || data.qtySft == null || data.qtySft is number) &&
+             (!('qtyPcs' in data) || data.qtyPcs == null || data.qtyPcs is number);
     }
 
     function isValidSale(data) {
@@ -190,7 +201,7 @@ service cloud.firestore {
 
     match /settings/{settingId} {
       allow read: if true;
-      allow write: if isSuperAdmin();
+      allow write: if isAdmin();
     }
 
     match /savedQuotes/{quoteId} {

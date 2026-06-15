@@ -14,8 +14,17 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Initialize Firebase Admin
-const firebaseConfig = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'firebase-applet-config.json'), 'utf-8'));
-const targetProjectId = firebaseConfig.projectId || "gen-lang-client-0163892992";
+let firebaseConfig: any = {};
+try {
+  const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
+  if (fs.existsSync(configPath)) {
+    firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+  }
+} catch (e) {
+  console.warn("Could not read firebase-applet-config.json local file:", e);
+}
+
+const targetProjectId = process.env.VITE_FIREBASE_PROJECT_ID || firebaseConfig.projectId || "gen-lang-client-0163892992";
 
 // CRITICAL: Set the project ID in environment variables to avoid cross-project API errors
 process.env.GOOGLE_CLOUD_PROJECT = targetProjectId;
@@ -25,16 +34,29 @@ console.log(`Initializing Firebase Admin for project: ${targetProjectId}`);
 
 let firebaseApp: any;
 try {
-  // Use default app initialization with explicit projectId
   if (admin.apps.length === 0) {
+    let credential;
+    if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+      try {
+        const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+        credential = admin.credential.cert(serviceAccount);
+        console.log("Firebase Admin credentials loaded from FIREBASE_SERVICE_ACCOUNT_JSON environment variable.");
+      } catch (parseErr) {
+        console.error("Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON env variable:", parseErr);
+        credential = admin.credential.applicationDefault();
+      }
+    } else {
+      credential = admin.credential.applicationDefault();
+    }
+
     firebaseApp = admin.initializeApp({
-      credential: admin.credential.applicationDefault(),
+      credential,
       projectId: targetProjectId,
     });
   } else {
     firebaseApp = admin.app();
   }
-  console.log("Firebase initialized successfully.");
+  console.log("Firebase Admin initialized successfully.");
 } catch (err: any) {
   console.error("Error initializing Firebase Admin:", err);
   throw err;
@@ -42,9 +64,10 @@ try {
 
 let db: any;
 try {
-  if (firebaseConfig.firestoreDatabaseId) {
-    console.log(`Connecting to Firestore database: ${firebaseConfig.firestoreDatabaseId}`);
-    db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
+  const dbId = process.env.VITE_FIREBASE_DATABASE_ID || firebaseConfig.firestoreDatabaseId;
+  if (dbId) {
+    console.log(`Connecting to Firestore database: ${dbId}`);
+    db = getFirestore(firebaseApp, dbId);
   } else {
     console.log("Connecting to default Firestore database");
     db = getFirestore(firebaseApp);

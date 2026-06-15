@@ -2595,38 +2595,76 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
           try {
             const data = JSON.parse(evt.target?.result as string);
             const batch = writeBatch(db);
+
+            // Generic clean utility which excludes undefined, null, and empty string sizes on numeric fields
+            const cleanObj = (obj: any, numericFields: string[]) => {
+              const res: any = {};
+              Object.keys(obj).forEach(key => {
+                if (key === 'id') return;
+                const val = obj[key];
+                if (val === undefined || val === null) return;
+
+                if (numericFields.includes(key)) {
+                  // If numeric, make sure it is a real number
+                  const num = Number(val);
+                  if (!isNaN(num)) {
+                    res[key] = num;
+                  }
+                } else if (typeof val === 'string') {
+                  // Ensure string values are trimmed
+                  res[key] = val.trim();
+                } else if (typeof val === 'boolean') {
+                  res[key] = val;
+                } else {
+                  res[key] = val;
+                }
+              });
+              return res;
+            };
             
             // Restore Inventory Items
             if (data.tiles) {
               data.tiles.forEach((t: any) => {
-                const { id, ...rest } = t;
-                batch.set(doc(collection(db, 'tiles')), { ...rest, createdAt: new Date() });
+                const cleaned = cleanObj(t, [
+                  'totalSft', 'totalPcs', 'diaBariSft', 'diaBariPcs',
+                  'bonorupaSft', 'bonorupaPcs', 'bananiSft', 'bananiPcs',
+                  'dokhinkhanSft', 'dokhinkhanPcs'
+                ]);
+                cleaned.name = String(cleaned.name || 'Tile');
+                cleaned.brand = String(cleaned.brand || 'Generic');
+                batch.set(doc(collection(db, 'tiles')), { ...cleaned, createdAt: new Date() });
               });
             }
             if (data.goods) {
               data.goods.forEach((g: any) => {
-                const { id, ...rest } = g;
-                batch.set(doc(collection(db, 'goods')), { ...rest, createdAt: new Date() });
+                const cleaned = cleanObj(g, ['dokhinkhan', 'bonorupa', 'banani']);
+                cleaned.code = String(cleaned.code || 'CODE');
+                batch.set(doc(collection(db, 'goods')), { ...cleaned, createdAt: new Date() });
               });
             }
             if (data.tools) {
               data.tools.forEach((t: any) => {
-                const { id, ...rest } = t;
-                batch.set(doc(collection(db, 'tools')), { ...rest, createdAt: new Date() });
+                const cleaned = cleanObj(t, ['qty']);
+                cleaned.details = String(cleaned.details || 'Tool');
+                cleaned.qty = Number(cleaned.qty ?? 0);
+                batch.set(doc(collection(db, 'tools')), { ...cleaned, createdAt: new Date() });
               });
             }
             if (data.bookedItems) {
               data.bookedItems.forEach((b: any) => {
-                const { id, ...rest } = b;
-                batch.set(doc(collection(db, 'bookedItems')), { ...rest, createdAt: new Date() });
+                const cleaned = cleanObj(b, ['qtySft', 'qtyPcs']);
+                cleaned.name = String(cleaned.name || 'Booked Item');
+                cleaned.code = String(cleaned.code || 'CODE');
+                cleaned.clientName = String(cleaned.clientName || 'Client');
+                batch.set(doc(collection(db, 'bookedItems')), { ...cleaned, createdAt: new Date() });
               });
             }
 
             // Restore Saved Quotes
             if (data.savedQuotes) {
               data.savedQuotes.forEach((q: any) => {
-                const { id, ...rest } = q;
-                batch.set(doc(collection(db, 'savedQuotes')), { ...rest, createdAt: new Date() });
+                const cleaned = cleanObj(q, []);
+                batch.set(doc(collection(db, 'savedQuotes')), { ...cleaned, createdAt: new Date() });
               });
             }
 
