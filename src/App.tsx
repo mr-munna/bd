@@ -3180,19 +3180,19 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
 
   const displayTiles = useMemo(() => {
     if (activeTab === 'search' || (showSearchBox && searchQuery.trim() !== '')) return filteredTiles;
-    if (activeTab === 'master') return activeTiles;
+    if (activeTab === 'master' || activeTab === 'stock') return activeTiles;
     return tiles;
   }, [activeTab, showSearchBox, searchQuery, filteredTiles, activeTiles, tiles]);
 
   const displayGoods = useMemo(() => {
     if (activeTab === 'search' || (showSearchBox && searchQuery.trim() !== '')) return filteredGoods;
-    if (activeTab === 'master') return activeGoods;
+    if (activeTab === 'master' || activeTab === 'stock') return activeGoods;
     return goods;
   }, [activeTab, showSearchBox, searchQuery, filteredGoods, activeGoods, goods]);
 
   const displayTools = useMemo(() => {
     if (activeTab === 'search' || (showSearchBox && searchQuery.trim() !== '')) return filteredTools;
-    if (activeTab === 'master') return activeTools;
+    if (activeTab === 'master' || activeTab === 'stock') return activeTools;
     return tools;
   }, [activeTab, showSearchBox, searchQuery, filteredTools, activeTools, tools]);
 
@@ -4718,7 +4718,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   <Database className="w-6 h-6 text-black" />
                   {activeTab === 'stock' ? 'Stock Items' : 'Stock Results'}
                   <span className="text-xs font-black text-white bg-[#0f172a] px-3 py-1 rounded-full shadow-lg ml-2">
-                    {displayedStockItems.length}
+                    {activeTab === 'stock' ? (stockSubTab === 'tiles' ? displayTiles.length : (stockSubTab === 'goods' ? displayGoods.length : stockItemsList.length)) : displayedStockItems.length}
                   </span>
                   {showSearchBox && activeTab === 'stock' && (
                     <div className="relative w-60 ml-2 hidden md:block">
@@ -4773,66 +4773,68 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                 </div>
               )}
 
-              <div className={cn(
-                "rounded-2xl shadow-2xl border-2 overflow-auto max-h-[60vh] md:max-h-[70vh] overscroll-auto",
-                activeTab === 'search' ? "bg-white/50 backdrop-blur-3xl border-white/60" : "bg-white border-gray-200"
-              )}>
-                <table className="w-full border-separate border-spacing-0 min-w-[1000px]">
-                  <thead>
-                    <tr>
-                      <TableHeader align="center" className={cn(activeTab === 'search' && "bg-slate-200/50")}>SL</TableHeader>
-                      <TableHeader align="center" className={cn(activeTab === 'search' && "bg-slate-200/50")}>Image</TableHeader>
-                      <TableHeader className={cn(activeTab === 'search' && "bg-slate-200/50")}>Tile/Item Name</TableHeader>
-                      <TableHeader align="center" className={cn(activeTab === 'search' && "bg-slate-200/50")}>Size</TableHeader>
-                      <TableHeader align="center" className={cn(activeTab === 'search' && "bg-slate-200/50")}>Code</TableHeader>
-                      <TableHeader align="center" className={cn(activeTab === 'search' && "bg-slate-200/50")}>Brand</TableHeader>
-                      <TableHeader align="center" className={cn(activeTab === 'search' && "bg-slate-200/50")}>Quantity (sft)</TableHeader>
-                      <TableHeader align="center" className={cn(activeTab === 'search' && "bg-slate-200/50")}>Quantity (pcs)</TableHeader>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {displayedStockItems.map((item, index) => (
-                      <tr 
-                        key={item.id} 
-                        onClick={() => setHighlightedRow(item.id)}
-                        className={cn(
-                          "transition-colors cursor-pointer",
-                          activeTab === 'search' ? "hover:bg-white/40" : "hover:bg-gray-50",
-                          highlightedRow === item.id && (activeTab === 'search' ? "bg-blue-100/50 ring-2 ring-blue-300 ring-inset" : "bg-yellow-50 ring-2 ring-yellow-200 ring-inset")
-                        )}
-                      >
-                            <TableCell align="center" style={{ color: BLUE_COLOR }} className="font-mono text-xs text-gray-800 font-normal border-slate-300">{index + 1}</TableCell>
-                            <TableCell align="center" className="border-slate-300">
-                              {item.imageUrl ? (
-                                <img 
-                                  src={item.imageUrl} 
-                                  alt={(item as any).name} 
-                                  className="w-12 h-12 object-cover rounded-lg border-2 border-white mx-auto cursor-zoom-in hover:scale-110 transition-transform shadow-md" 
-                                  referrerPolicy="no-referrer"
-                                  onClick={() => setPreviewImage(item.imageUrl)}
-                                />
-                              ) : (
-                                <div className="w-12 h-12 bg-white/50 rounded-lg flex items-center justify-center mx-auto border border-white/40">
-                                  <Package className="w-6 h-6 text-gray-700" />
-                                </div>
-                              )}
-                            </TableCell>
-                            <TableCell className="font-normal text-gray-800 border-slate-300 text-sm">{(item as any).name}</TableCell>
-                            <TableCell align="center" className="font-normal text-gray-800 border-slate-300">{(item as any).size}</TableCell>
-                            <TableCell align="center" className="font-mono text-blue-800 font-normal border-slate-300">{(item as any).code || (item as any).brand}</TableCell>
-                            <TableCell align="center" className="font-normal text-gray-800 border-slate-300">{(item as any).brand}</TableCell>
-                            <TableCell align="center" className={cn("font-normal text-lg border-slate-300", (item.stockSft || 0) <= 0 ? "text-red-700" : "text-blue-900")}>{item.stockSft || 0}</TableCell>
-                            <TableCell align="center" className={cn("font-normal text-lg border-slate-300", (item.stockPcs || 0) <= 0 ? "text-red-700" : "text-blue-900")}>{item.stockPcs || 0}</TableCell>
-                          </tr>
-                        ))}
-                  </tbody>
-                </table>
-              </div>
+              {((activeTab === 'stock' && stockSubTab === 'all') || (activeTab !== 'stock' && filteredStockItems.length > 0)) && (
+                <div className={cn(
+                  "rounded-2xl shadow-2xl border-2 overflow-auto max-h-[60vh] md:max-h-[70vh] overscroll-auto",
+                  activeTab === 'search' ? "bg-white/50 backdrop-blur-3xl border-white/60" : "bg-white border-gray-200"
+                )}>
+                  <table className="w-full border-separate border-spacing-0 min-w-[1000px]">
+                    <thead>
+                      <tr>
+                        <TableHeader align="center" className={cn(activeTab === 'search' && "bg-slate-200/50")}>SL</TableHeader>
+                        <TableHeader align="center" className={cn(activeTab === 'search' && "bg-slate-200/50")}>Image</TableHeader>
+                        <TableHeader className={cn(activeTab === 'search' && "bg-slate-200/50")}>Tile/Item Name</TableHeader>
+                        <TableHeader align="center" className={cn(activeTab === 'search' && "bg-slate-200/50")}>Size</TableHeader>
+                        <TableHeader align="center" className={cn(activeTab === 'search' && "bg-slate-200/50")}>Code</TableHeader>
+                        <TableHeader align="center" className={cn(activeTab === 'search' && "bg-slate-200/50")}>Brand</TableHeader>
+                        <TableHeader align="center" className={cn(activeTab === 'search' && "bg-slate-200/50")}>Quantity (sft)</TableHeader>
+                        <TableHeader align="center" className={cn(activeTab === 'search' && "bg-slate-200/50")}>Quantity (pcs)</TableHeader>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {displayedStockItems.map((item, index) => (
+                        <tr 
+                          key={item.id} 
+                          onClick={() => setHighlightedRow(item.id)}
+                          className={cn(
+                            "transition-colors cursor-pointer",
+                            activeTab === 'search' ? "hover:bg-white/40" : "hover:bg-gray-50",
+                            highlightedRow === item.id && (activeTab === 'search' ? "bg-blue-100/50 ring-2 ring-blue-300 ring-inset" : "bg-yellow-50 ring-2 ring-yellow-200 ring-inset")
+                          )}
+                        >
+                              <TableCell align="center" style={{ color: BLUE_COLOR }} className="font-mono text-xs text-gray-800 font-normal border-slate-300">{index + 1}</TableCell>
+                              <TableCell align="center" className="border-slate-300">
+                                {item.imageUrl ? (
+                                  <img 
+                                    src={item.imageUrl} 
+                                    alt={(item as any).name} 
+                                    className="w-12 h-12 object-cover rounded-lg border-2 border-white mx-auto cursor-zoom-in hover:scale-110 transition-transform shadow-md" 
+                                    referrerPolicy="no-referrer"
+                                    onClick={() => setPreviewImage(item.imageUrl)}
+                                  />
+                                ) : (
+                                  <div className="w-12 h-12 bg-white/50 rounded-lg flex items-center justify-center mx-auto border border-white/40">
+                                    <Package className="w-6 h-6 text-gray-700" />
+                                  </div>
+                                )}
+                              </TableCell>
+                              <TableCell className="font-normal text-gray-800 border-slate-300 text-sm">{(item as any).name}</TableCell>
+                              <TableCell align="center" className="font-normal text-gray-800 border-slate-300">{(item as any).size}</TableCell>
+                              <TableCell align="center" className="font-mono text-blue-800 font-normal border-slate-300">{(item as any).code || (item as any).brand}</TableCell>
+                              <TableCell align="center" className="font-normal text-gray-800 border-slate-300">{(item as any).brand}</TableCell>
+                              <TableCell align="center" className={cn("font-normal text-lg border-slate-300", (item.stockSft || 0) <= 0 ? "text-red-700" : "text-blue-900")}>{item.stockSft || 0}</TableCell>
+                              <TableCell align="center" className={cn("font-normal text-lg border-slate-300", (item.stockPcs || 0) <= 0 ? "text-red-700" : "text-blue-900")}>{item.stockPcs || 0}</TableCell>
+                            </tr>
+                          ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </section>
           )}
 
           {/* Tiles Section */}
-          {(((activeTab === 'master' || activeTab === 'master_sheet') && isAdmin && masterSubTab === 'tiles') || ((activeTab === 'search' || showSearchBox) && searchQuery.trim() !== '' && filteredTiles.length > 0)) && (
+          {(((activeTab === 'master' || activeTab === 'master_sheet') && isAdmin && masterSubTab === 'tiles') || (activeTab === 'stock' && stockSubTab === 'tiles') || ((activeTab === 'search' || showSearchBox) && searchQuery.trim() !== '' && filteredTiles.length > 0)) && (
             <section className="space-y-4">
               <div className={cn(
                 "flex items-center justify-between",
@@ -4843,7 +4845,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   activeTab === 'search' ? "font-black text-black" : "font-bold text-gray-900"
                 )}>
                   <Grid3X3 className={cn("w-6 h-6", activeTab === 'search' ? "text-black" : "text-[#0f172a]")} />
-                  {(activeTab === 'master' || activeTab === 'master_sheet') ? 'Tiles Items' : 'Tiles Results'}
+                  {(activeTab === 'master' || activeTab === 'master_sheet' || activeTab === 'stock') ? 'Tiles Items' : 'Tiles Results'}
                   <span className={cn(
                     "px-2 py-1 rounded-full",
                     activeTab === 'search' ? "text-xs font-black text-white bg-black shadow-lg" : "text-sm font-normal text-gray-500 bg-gray-100"
@@ -4965,7 +4967,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                 "rounded-2xl shadow-xl border overflow-auto max-h-[60vh] md:max-h-[70vh] overscroll-auto",
                 activeTab === 'search' ? "bg-white/80 backdrop-blur-xl border-white/60 shadow-2xl" : "bg-white border-gray-200"
               )}>
-                <table className="w-full border-separate border-spacing-0 min-w-[1200px]">
+                <table className="w-full border-separate border-spacing-0 min-w-[1800px]">
                   <thead>
                     <tr>
                       <TableHeader className={cn("w-10", activeTab === 'search' && "bg-slate-200/50")}>
@@ -5276,7 +5278,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
           )}
 
           {/* Goods Section */}
-          {(((activeTab === 'master' || activeTab === 'master_sheet') && isAdmin && masterSubTab === 'goods') || ((activeTab === 'search' || showSearchBox) && searchQuery.trim() !== '' && filteredGoods.length > 0)) && (
+          {(((activeTab === 'master' || activeTab === 'master_sheet') && isAdmin && masterSubTab === 'goods') || (activeTab === 'stock' && stockSubTab === 'goods') || ((activeTab === 'search' || showSearchBox) && searchQuery.trim() !== '' && filteredGoods.length > 0)) && (
             <section className="space-y-4">
               <div className={cn(
                 "flex items-center justify-between",
@@ -5287,7 +5289,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   activeTab === 'search' ? "font-black text-black" : "font-bold text-gray-900"
                 )}>
                   <Package className={cn("w-6 h-6", activeTab === 'search' ? "text-black" : "text-[#0f172a]")} />
-                  {(activeTab === 'master' || activeTab === 'master_sheet') ? 'Sanitary Items' : 'Sanitary Results'}
+                  {(activeTab === 'master' || activeTab === 'master_sheet' || activeTab === 'stock') ? 'Sanitary Items' : 'Sanitary Results'}
                   <span className={cn(
                     "px-3 py-1 rounded-full",
                     activeTab === 'search' ? "text-xs font-black text-white bg-black shadow-lg" : "text-sm font-normal text-gray-500 bg-gray-100"
