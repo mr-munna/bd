@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-container, .print-container * {
+    visibility: visible;
+  }
+  .print-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* Eliminate padding on parent cells during edits to make inputs fully seamless */
+td:has(.editing-input-active) {
+  padding: 0 !important;
+  height: 1px; /* Firefox/Chrome trick to make children fill 100% height */
+}
+
+/* Ensure inputs and textareas in table cells expand and look consistent */
+.editing-input-active {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: transparent;
+  padding: 0.75rem 1rem;
+  overflow: hidden;
+}
+
+button, [role="button"], .cursor-pointer-all-tabs {
+  cursor: pointer !important;
+}
+
+textarea.editing-input-active {
+  resize: none;
+}
+
+/* Specific mobile layout tweaks */
+@media (max-width: 767px) {
+  html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+  }
+}

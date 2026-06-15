@@ -1,0 +1,8 @@
+1517:  }, [activeTab, masterSubTab]);
+1965:  const [masterSubTab, setMasterSubTab] = useState<'tiles' | 'goods' | 'tools'>('tiles');
+3757:                  masterSubTab === 'tiles' ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
+3766:                  masterSubTab === 'goods' ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
+3775:                  masterSubTab === 'tools' ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
+4143:          {(((activeTab === 'master' || activeTab === 'master_sheet') && masterSubTab === 'tiles') || (activeTab === 'search' && showSearchBox && searchQuery.trim() !== '' && isFullyApproved && filteredTiles.length > 0)) && (
+4477:          {(((activeTab === 'master' || activeTab === 'master_sheet') && masterSubTab === 'goods') || (activeTab === 'search' && showSearchBox && searchQuery.trim() !== '' && isFullyApproved && filteredGoods.length > 0)) && (
+4782:          {(((activeTab === 'master' || activeTab === 'master_sheet') && masterSubTab === 'tools') || (activeTab === 'search' && showSearchBox && searchQuery.trim() !== '' && isFullyApproved && filteredTools.length > 0)) && (

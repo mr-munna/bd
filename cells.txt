@@ -1,0 +1,33 @@
+905:              <TableCell align="center" style={{ color: BLUE_COLOR }} className="font-mono text-xs">{index + 1}</TableCell>
+4266:                          <TableCell align="center" className="font-mono text-xs text-black font-black border-slate-300">{index + 1}</TableCell>
+4322:                          <TableCell className={cn("text-black border-slate-300", activeTab === 'search' ? "font-black" : "font-medium")}>
+4331:                          <TableCell align="center" className="text-black font-black border-slate-300">
+4340:                          <TableCell align="center" className="text-black font-black border-slate-300">
+4349:                          <TableCell align="center" className={cn("font-black border-slate-300", isOutOfStock ? "bg-red-700 text-white" : getCellColor(tile.totalSft))}>
+4352:                          <TableCell align="center" className={cn("font-black border-slate-300", isOutOfStock ? "bg-red-700 text-white" : getCellColor(tile.totalPcs))}>
+4386:                          <TableCell className="text-xs text-black font-black italic border-slate-300">
+4406:                          <TableCell className="text-xs text-black font-black italic border-slate-300">
+4579:                          <TableCell align="center" className="font-mono text-xs text-black font-black border-slate-300">{index + 1}</TableCell>
+4633:                          <TableCell align="center" className="text-black font-black border-slate-300">
+4642:                          <TableCell align="center" className="font-mono text-blue-800 font-black border-slate-300">
+4651:                          <TableCell className={cn("max-w-xs truncate text-black border-slate-300", activeTab === 'search' ? "font-black" : "")}>
+4660:                          <TableCell align="center" className={cn("font-black border-slate-300", isOutOfStock ? "bg-red-700 text-white" : getCellColor(totalPcs))}>
+4682:                          <TableCell align="center" className={cn("border-slate-300 font-black", getCellColor(good.banani))}>
+4692:                          <TableCell className="text-xs text-black font-black italic border-slate-300">
+4701:                          <TableCell align="center" className={cn("border-slate-300 font-black", getCellColor(good.dokhinkhan))}>
+4711:                          <TableCell className="text-xs text-black font-black italic border-slate-300">
+4848:                          <TableCell align="center" style={{ color: BLUE_COLOR }} className="font-mono text-xs">{index + 1}</TableCell>
+4902:                          <TableCell className="font-medium">
+4911:                          <TableCell align="center" className={cn("font-semibold", Math.round(tool.qty || 0) <= 0 ? "text-red-600" : "text-[#4285F4]")}>
+5131:                          <TableCell align="center" style={{ color: BLUE_COLOR }} className="font-mono text-xs">{index + 1}</TableCell>
+5185:                          <TableCell className="font-medium">
+5203:                          <TableCell align="center" className="font-mono text-[#4285F4]">
+5221:                          <TableCell align="center" className="font-semibold text-[#4285F4]">
+5247:                          <TableCell align="center" className="font-semibold text-[#4285F4]">
+5456:                            <TableCell align="center" style={{ color: BLUE_COLOR }} className="font-mono text-xs text-black font-black border-slate-300">{index + 1}</TableCell>
+5472:                            <TableCell className="font-black text-black border-slate-300 text-sm">{(item as any).name}</TableCell>
+5473:                            <TableCell align="center" className="font-black text-black border-slate-300">{(item as any).size}</TableCell>
+5474:                            <TableCell align="center" className="font-mono text-blue-800 font-black border-slate-300">{(item as any).code || (item as any).brand}</TableCell>
+5475:                            <TableCell align="center" className="font-black text-black border-slate-300">{(item as any).brand}</TableCell>
+5476:                            <TableCell align="center" className={cn("font-black text-lg border-slate-300", (item.stockSft || 0) <= 0 ? "text-red-700" : "text-blue-900")}>{item.stockSft || 0}</TableCell>
+5477:                            <TableCell align="center" className={cn("font-black text-lg border-slate-300", (item.stockPcs || 0) <= 0 ? "text-red-700" : "text-blue-900")}>{item.stockPcs || 0}</TableCell>

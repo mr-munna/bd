@@ -1,0 +1,225 @@
+{
+  "entities": {
+    "Tile": {
+      "title": "Tile",
+      "description": "Inventory item for tiles with location-specific stock.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Product name" },
+        "size": { "type": "string", "description": "Product size" },
+        "brand": { "type": "string", "description": "Brand name" },
+        "totalSft": { "type": "number", "description": "Total Square Feet" },
+        "totalPcs": { "type": "number", "description": "Total Pieces" },
+        "diaBariSft": { "type": "number", "description": "Dia-Bari SFT" },
+        "diaBariPcs": { "type": "number", "description": "Dia-Bari PCS" },
+        "diaBariRemark": { "type": "string", "description": "Dia-Bari Remark" },
+        "bonorupaSft": { "type": "number", "description": "Bonorupa SFT" },
+        "bonorupaPcs": { "type": "number", "description": "Bonorupa PCS" },
+        "bonorupaRemark": { "type": "string", "description": "Bonorupa Remark" },
+        "bananiSft": { "type": "number", "description": "Banani SFT" },
+        "bananiPcs": { "type": "number", "description": "Banani PCS" },
+        "bananiRemark": { "type": "string", "description": "Banani Remark" },
+        "dokhinkhanSft": { "type": "number", "description": "Dokhinkhan SFT" },
+        "dokhinkhanPcs": { "type": "number", "description": "Dokhinkhan PCS" },
+        "dokhinkhanRemark": { "type": "string", "description": "Dokhinkhan Remark" },
+        "imageUrl": { "type": "string", "description": "Image URL" }
+      },
+      "required": ["name", "brand"]
+    },
+    "Good": {
+      "title": "Good",
+      "description": "Inventory item for general goods.",
+      "type": "object",
+      "properties": {
+        "brand": { "type": "string", "description": "Brand name" },
+        "code": { "type": "string", "description": "Product code" },
+        "description": { "type": "string", "description": "Product description" },
+        "dokhinkhan": { "type": "number", "description": "Dokhinkhan quantity" },
+        "dokhinkhanRemark": { "type": "string", "description": "Dokhinkhan Remark" },
+        "bonorupa": { "type": "number", "description": "Bonorupa quantity" },
+        "bonorupaRemark": { "type": "string", "description": "Bonorupa Remark" },
+        "banani": { "type": "number", "description": "Banani quantity" },
+        "bananiRemark": { "type": "string", "description": "Banani Remark" },
+        "imageUrl": { "type": "string", "description": "Image URL" }
+      },
+      "required": ["code"]
+    },
+    "Tool": {
+      "title": "Tool",
+      "description": "Inventory item for tools.",
+      "type": "object",
+      "properties": {
+        "details": { "type": "string", "description": "Tool details" },
+        "qty": { "type": "number", "description": "Quantity" },
+        "issueToDate": { "type": "string", "description": "Issued to and date" },
+        "states": { "type": "string", "description": "Current state/condition" },
+        "imageUrl": { "type": "string", "description": "Image URL" }
+      },
+      "required": ["details", "qty"]
+    },
+    "BookedItem": {
+      "title": "BookedItem",
+      "description": "Items that have been booked by clients.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Item Name" },
+        "size": { "type": "string", "description": "Item Size" },
+        "code": { "type": "string", "description": "Item Code" },
+        "brand": { "type": "string", "description": "Brand" },
+        "qtySft": { "type": "number", "description": "Quantity in SFT" },
+        "qtyPcs": { "type": "number", "description": "Quantity in PCS" },
+        "clientName": { "type": "string", "description": "Client Name" },
+        "marketingPerson": { "type": "string", "description": "Marketing Person" },
+        "remark": { "type": "string", "description": "Remark" },
+        "imageUrl": { "type": "string", "description": "Image URL" }
+      },
+      "required": ["name", "code", "clientName"]
+    },
+    "QuoteSettings": {
+      "title": "QuoteSettings",
+      "description": "Global settings for the quotation builder.",
+      "type": "object",
+      "properties": {
+        "header": {
+          "type": "object",
+          "properties": {
+            "logoText": { "type": "string" },
+            "companyName": { "type": "string" },
+            "headerImage": { "type": "string" }
+          }
+        },
+        "footer": {
+          "type": "object",
+          "properties": {
+            "officeAddress": { "type": "string" },
+            "contactInfo": { "type": "string" },
+            "registeredAddress": { "type": "string" }
+          }
+        }
+      }
+    },
+    "User": {
+      "title": "User",
+      "description": "Application user with role and status.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["supreme_admin", "super_admin", "admin", "user", "guest"] },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "expiryDate": { "type": "string" }
+      },
+      "required": ["email", "role", "status"]
+    },
+    "Sale": {
+      "title": "Sale",
+      "description": "Sales record and invoice.",
+      "type": "object",
+      "properties": {
+        "invoiceNumber": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "clientName": { "type": "string" },
+        "clientPhone": { "type": "string" },
+        "clientAddress": { "type": "string" },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "type": { "type": "string", "enum": ["tile", "good", "tool"] },
+              "name": { "type": "string" },
+              "quantity": { "type": "number" },
+              "unit": { "type": "string" },
+              "unitPrice": { "type": "number" },
+              "total": { "type": "number" }
+            }
+          }
+        },
+        "subTotal": { "type": "number" },
+        "discount": { "type": "number" },
+        "totalAmount": { "type": "number" },
+        "paidAmount": { "type": "number" },
+        "dueAmount": { "type": "number" },
+        "status": { "type": "string", "enum": ["paid", "partial", "due"] },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["invoiceNumber", "date", "clientName", "totalAmount"]
+    },
+    "SavedQuote": {
+      "title": "SavedQuote",
+      "description": "A saved quotation for a client.",
+      "type": "object",
+      "properties": {
+        "quoteInfo": { "type": "object" },
+        "quoteItems": { "type": "array" },
+        "totalAmount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      }
+    },
+    "BillingRecord": {
+      "title": "BillingRecord",
+      "description": "A billing or quotation document.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string", "enum": ["BILL", "QUOTATION"] },
+        "billNumber": { "type": "string" },
+        "date": { "type": "string" },
+        "recipientName": { "type": "string" },
+        "site": { "type": "string" },
+        "subject": { "type": "string" },
+        "items": { "type": "array" },
+        "totalInWords": { "type": "string" },
+        "grandTotal": { "type": "number" },
+        "preparedBy": { "type": "string" },
+        "signature": { "type": "string" },
+        "termsAndConditions": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "revision": { "type": "number" }
+      },
+      "required": ["id", "type", "billNumber", "recipientName", "grandTotal"]
+    }
+  },
+  "firestore": {
+    "/tiles": {
+      "schema": "Tile",
+      "description": "Collection of tile products"
+    },
+    "/goods": {
+      "schema": "Good",
+      "description": "Collection of general goods"
+    },
+    "/tools": {
+      "schema": "Tool",
+      "description": "Collection of tools"
+    },
+    "/bookedItems": {
+      "schema": "BookedItem",
+      "description": "Collection of booked items"
+    },
+    "/settings": {
+      "schema": "QuoteSettings",
+      "description": "Global application settings"
+    },
+    "/users": {
+      "schema": "User",
+      "description": "Registered users"
+    },
+    "/sales": {
+      "schema": "Sale",
+      "description": "Sales history"
+    },
+    "/savedQuotes": {
+      "schema": "SavedQuote",
+      "description": "Collection of saved quotations"
+    },
+    "/billing_records": {
+      "schema": "BillingRecord",
+      "description": "Billing/Quotation documents"
+    }
+  }
+}

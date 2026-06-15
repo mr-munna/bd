@@ -1,0 +1,214 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net: Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers (Phase 3: Primitive Definition) ---
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Role Fetching
+    function getUserData(uid) {
+      return get(/databases/$(database)/documents/users/$(uid)).data;
+    }
+
+    function userExists(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid));
+    }
+
+    function isSupremeAdmin() {
+      return isEmailVerified() && (
+        request.auth.token.email == 'bijoymahmudmunna@gmail.com' ||
+        (userExists(request.auth.uid) && getUserData(request.auth.uid).role == 'supreme_admin')
+      );
+    }
+
+    function isSuperAdmin() {
+      return isSupremeAdmin() || (isEmailVerified() && userExists(request.auth.uid) && getUserData(request.auth.uid).role == 'super_admin');
+    }
+
+    function isAdmin() {
+      return isSuperAdmin() || (isEmailVerified() && userExists(request.auth.uid) && getUserData(request.auth.uid).role == 'admin');
+    }
+
+    function isApproved() {
+      return isSupremeAdmin() || (isEmailVerified() && userExists(request.auth.uid) && getUserData(request.auth.uid).status == 'approved');
+    }
+
+    function isPendingOrApproved() {
+      return isSupremeAdmin() || (isEmailVerified() && userExists(request.auth.uid) && (getUserData(request.auth.uid).status == 'approved' || getUserData(request.auth.uid).status == 'pending'));
+    }
+
+    // --- Entity Validations (Phase 4: Drafting) ---
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['email', 'role', 'status']) &&
+             data.email is string && data.email.size() <= 100 &&
+             data.role in ['supreme_admin', 'super_admin', 'admin', 'user', 'guest'] &&
+             data.status in ['pending', 'approved', 'rejected'] &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 200)) &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 2000)) &&
+             (!('phoneNumber' in data) || (data.phoneNumber is string && data.phoneNumber.size() <= 30)) &&
+             (!('expiryDate' in data) || (data.expiryDate is string && data.expiryDate.size() <= 100)) &&
+             (!('createdAt' in data) || data.createdAt is timestamp);
+    }
+
+    function isValidTile(data) {
+      return data.keys().hasAll(['name', 'brand']) &&
+             data.name is string && data.name.size() <= 200 &&
+             data.brand is string && data.brand.size() <= 100 &&
+             (!('size' in data) || (data.size is string && data.size.size() <= 50)) &&
+             (!('totalSft' in data) || data.totalSft is number) &&
+             (!('totalPcs' in data) || data.totalPcs is number) &&
+             (!('diaBariSft' in data) || data.diaBariSft is number) &&
+             (!('diaBariPcs' in data) || data.diaBariPcs is number) &&
+             (!('diaBariRemark' in data) || (data.diaBariRemark is string && data.diaBariRemark.size() <= 500)) &&
+             (!('bonorupaSft' in data) || data.bonorupaSft is number) &&
+             (!('bonorupaPcs' in data) || data.bonorupaPcs is number) &&
+             (!('bonorupaRemark' in data) || (data.bonorupaRemark is string && data.bonorupaRemark.size() <= 500)) &&
+             (!('bananiSft' in data) || data.bananiSft is number) &&
+             (!('bananiPcs' in data) || data.bananiPcs is number) &&
+             (!('bananiRemark' in data) || (data.bananiRemark is string && data.bananiRemark.size() <= 500)) &&
+             (!('dokhinkhanSft' in data) || data.dokhinkhanSft is number) &&
+             (!('dokhinkhanPcs' in data) || data.dokhinkhanPcs is number) &&
+             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 1000000)) &&
+             (!('deleted' in data) || data.deleted is bool);
+    }
+
+    function isValidGood(data) {
+      return data.keys().hasAll(['code']) &&
+             data.code is string && data.code.size() <= 100 &&
+             (!('brand' in data) || (data.brand is string && data.brand.size() <= 100)) &&
+             (!('description' in data) || (data.description is string && data.description.size() <= 1000)) &&
+             (!('dokhinkhan' in data) || data.dokhinkhan is number) &&
+             (!('dokhinkhanRemark' in data) || (data.dokhinkhanRemark is string && data.dokhinkhanRemark.size() <= 500)) &&
+             (!('bonorupa' in data) || data.bonorupa is number) &&
+             (!('bonorupaRemark' in data) || (data.bonorupaRemark is string && data.bonorupaRemark.size() <= 500)) &&
+             (!('banani' in data) || data.banani is number) &&
+             (!('bananiRemark' in data) || (data.bananiRemark is string && data.bananiRemark.size() <= 500)) &&
+             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 1000000)) &&
+             (!('deleted' in data) || data.deleted is bool);
+    }
+
+    function isValidTool(data) {
+      return data.keys().hasAll(['details', 'qty']) &&
+             data.details is string && data.details.size() <= 200 &&
+             data.qty is number &&
+             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 1000000)) &&
+             (!('deleted' in data) || data.deleted is bool);
+    }
+
+    function isValidBookedItem(data) {
+      return data.keys().hasAll(['name', 'code', 'clientName']) &&
+             data.name is string && data.name.size() <= 200 &&
+             data.code is string && data.code.size() <= 100 &&
+             data.clientName is string && data.clientName.size() <= 100 &&
+             (!('qtySft' in data) || data.qtySft is number) &&
+             (!('qtyPcs' in data) || data.qtyPcs is number);
+    }
+
+    function isValidSale(data) {
+      return data.keys().hasAll(['invoiceNumber', 'clientName', 'totalAmount']) &&
+             data.invoiceNumber is string && 
+             data.clientName is string &&
+             data.totalAmount is number;
+    }
+
+    // --- Collections ---
+
+    match /users/{userId} {
+      allow get: if (isSignedIn() && request.auth.uid == userId) || isApproved();
+      allow list: if isSuperAdmin();
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming()) && (
+        (incoming().role == 'guest' && (incoming().status == 'pending' || incoming().status == 'approved')) ||
+        (incoming().role == 'user' && incoming().status == 'pending') ||
+        (request.auth.token.email == 'bijoymahmudmunna@gmail.com' && incoming().role == 'supreme_admin' && incoming().status == 'approved')
+      );
+      allow update: if isSupremeAdmin() || (
+        isSignedIn() && request.auth.uid == userId && 
+        isValidUser(incoming()) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL'])
+      );
+      allow delete: if isSupremeAdmin();
+    }
+
+    match /tiles/{tileId} {
+      allow read: if isPendingOrApproved();
+      allow create: if isAdmin() && isValidTile(incoming());
+      allow update: if isAdmin() && isValidTile(incoming());
+      allow delete: if isSuperAdmin();
+    }
+
+    match /goods/{goodId} {
+      allow read: if isPendingOrApproved();
+      allow create: if isAdmin() && isValidGood(incoming());
+      allow update: if isAdmin() && isValidGood(incoming());
+      allow delete: if isSuperAdmin();
+    }
+
+    match /tools/{toolId} {
+      allow read: if isPendingOrApproved();
+      allow create: if isAdmin() && isValidTool(incoming());
+      allow update: if isAdmin() && isValidTool(incoming());
+      allow delete: if isSuperAdmin();
+    }
+
+    match /bookedItems/{itemId} {
+      allow read: if isPendingOrApproved();
+      allow create: if isAdmin() && isValidBookedItem(incoming());
+      allow update: if isAdmin() && isValidBookedItem(incoming());
+      allow delete: if isSuperAdmin();
+    }
+
+    match /sales/{saleId} {
+      allow read: if isApproved();
+      allow create: if isAdmin() && isValidSale(incoming());
+      allow update: if isSuperAdmin() && isValidSale(incoming());
+      allow delete: if isSuperAdmin();
+    }
+
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
+    match /savedQuotes/{quoteId} {
+      allow read: if isPendingOrApproved();
+      allow create: if isApproved();
+      allow update: if isSuperAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /billing_records/{recordId} {
+      allow read: if isPendingOrApproved();
+      allow create, update: if isApproved();
+      allow delete: if isSuperAdmin();
+    }
+    
+    // Test collection for initial connection validation
+    match /test/{docId} {
+      allow read: if true;
+    }
+  }
+}
