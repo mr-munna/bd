@@ -349,8 +349,12 @@ export function SalesManager({
       .filter(g => !g.deleted && (g.description.toLowerCase().includes(query) || g.brand.toLowerCase().includes(query) || g.code.toLowerCase().includes(query)))
       .map(g => ({ ...g, type: 'good' as const }));
       
-    return [...matchedTiles, ...matchedGoods].slice(0, 10);
-  }, [itemSearchQuery, tiles, goods]);
+    const matchedTools = tools
+      .filter(t => !t.deleted && t.details.toLowerCase().includes(query))
+      .map(t => ({ ...t, type: 'tool' as const }));
+      
+    return [...matchedTiles, ...matchedGoods, ...matchedTools].slice(0, 10);
+  }, [itemSearchQuery, tiles, goods, tools]);
 
   const handleDeleteSale = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -924,19 +928,74 @@ export function SalesManager({
                                     className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                                 />
                                 {itemSearchQuery && filteredInventory.length > 0 && (
-                                    <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 shadow-xl rounded-xl max-h-60 overflow-y-auto z-50">
+                                    <div className="absolute top-full right-0 mt-2 bg-white border border-gray-200 shadow-2xl rounded-2xl w-[320px] sm:w-[500px] md:w-[600px] max-h-80 overflow-y-auto z-50 p-2 space-y-1">
                                          {filteredInventory.map(item => (
                                              <button
                                                 key={item.id}
                                                 onClick={() => handleAddItem(item, item.type as any)}
-                                                className="w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-50 last:border-0 flex items-center justify-between group"
+                                                className="w-full text-left px-4 py-3 hover:bg-slate-50 border border-transparent hover:border-slate-100 rounded-xl flex items-center justify-between gap-4 group transition-all"
                                              >
-                                                <span className="text-sm font-medium text-gray-900 line-clamp-1">
-                                                    {item.type === 'tile' ? `${item.name} (${item.size})` :
-                                                     item.type === 'good' ? `${item.brand} - ${item.description}` : item.name}
-                                                </span>
-                                                <span className="text-[10px] font-bold px-2 py-1 bg-gray-100 rounded text-gray-500 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors uppercase">
-                                                    Add
+                                                <div className="flex flex-col gap-1.5 w-full">
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <span className={cn(
+                                                            "text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider",
+                                                            item.type === 'tile' ? "bg-blue-50 text-blue-700 border border-blue-100" :
+                                                            item.type === 'good' ? "bg-purple-50 text-purple-700 border border-purple-100" :
+                                                            "bg-amber-50 text-amber-700 border border-amber-100"
+                                                        )}>
+                                                            {item.type}
+                                                        </span>
+                                                        <span className="text-sm font-bold text-gray-900 group-hover:text-blue-850 transition-colors">
+                                                            {item.type === 'tile' ? item.name :
+                                                             item.type === 'good' ? `${item.brand} - ${item.description} (Code: ${item.code || 'N/A'})` :
+                                                             (item as any).details}
+                                                        </span>
+                                                    </div>
+                                                    
+                                                    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-gray-500 font-medium">
+                                                        {item.type === 'tile' && (
+                                                            <>
+                                                                <span className="bg-gray-100 text-gray-750 px-1.5 py-0.5 rounded font-bold font-mono text-[10px]">
+                                                                    Size: {item.size}
+                                                                </span>
+                                                                <span className="text-emerald-850 font-bold bg-emerald-50 px-1.5 py-0.5 rounded text-[10px]">
+                                                                    Stock: {item.totalSft || 0} sft / {item.totalPcs || 0} pcs
+                                                                </span>
+                                                                <span className="text-gray-400 font-normal">
+                                                                    (DiaBari: {item.diaBariSft || 0}sft, Bonorupa: {item.bonorupaSft || 0}sft, Banani: {item.bananiSft || 0}sft, Dokhinkhan: {item.dokhinkhanSft || 0}sft)
+                                                                </span>
+                                                            </>
+                                                        )}
+                                                        {item.type === 'good' && (
+                                                            <>
+                                                                <span className="bg-gray-105 text-gray-700 px-1.5 py-0.5 rounded font-bold font-mono text-[10px]">
+                                                                    Size: N/A
+                                                                </span>
+                                                                <span className="text-emerald-850 font-bold bg-emerald-50 px-1.5 py-0.5 rounded text-[10px]">
+                                                                    Stock: {(item.dokhinkhan || 0) + (item.bonorupa || 0) + (item.banani || 0)} pcs
+                                                                </span>
+                                                                <span className="text-gray-400 font-normal">
+                                                                    (Dokhinkhan: {item.dokhinkhan || 0}, Bonorupa: {item.bonorupa || 0}, Banani: {item.banani || 0})
+                                                                </span>
+                                                            </>
+                                                        )}
+                                                        {item.type === 'tool' && (
+                                                            <>
+                                                                <span className="bg-gray-105 text-gray-700 px-1.5 py-0.5 rounded font-bold font-mono text-[10px]">
+                                                                    Size: N/A
+                                                                </span>
+                                                                <span className="text-emerald-850 font-bold bg-emerald-50 px-1.5 py-0.5 rounded text-[10px]">
+                                                                    Stock: {(item as any).qty || 0} pcs
+                                                                </span>
+                                                                <span className="text-gray-400 font-normal">
+                                                                    (Status: {(item as any).states || 'N/A'})
+                                                                </span>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <span className="text-xs font-bold px-3 py-1.5 bg-gray-100 rounded-lg text-gray-600 group-hover:bg-[#0f172a] group-hover:text-white transition-all shadow-sm shrink-0">
+                                                    + Add
                                                 </span>
                                              </button>
                                          ))}

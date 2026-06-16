@@ -5026,7 +5026,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                             selectedTiles.includes(tile.id) && !isOutOfStock && "bg-blue-50/50",
                             highlightedRow === tile.id && !isOutOfStock && (activeTab === 'search' ? "bg-blue-100/50 ring-2 ring-blue-300 ring-inset" : "bg-yellow-50 ring-2 ring-yellow-200 ring-inset")
                           )}
-                          style={isOutOfStock ? { backgroundColor: '#FBDAD7' } : undefined}
+                          style={isOutOfStock ? { backgroundColor: '#FCE4D6' } : undefined}
                         >
                           <TableCell className="border-slate-300">
                             <input 
@@ -5450,7 +5450,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                             selectedGoods.includes(good.id) && !isOutOfStock && "bg-blue-50/50",
                             highlightedRow === good.id && !isOutOfStock && (activeTab === 'search' ? "bg-blue-100/50 ring-2 ring-blue-300 ring-inset" : "bg-yellow-50 ring-2 ring-yellow-200 ring-inset")
                           )}
-                          style={isOutOfStock ? { backgroundColor: '#FBDAD7' } : undefined}
+                          style={isOutOfStock ? { backgroundColor: '#FCE4D6' } : undefined}
                         >
                           <TableCell className="border-slate-300">
                             <input 
@@ -5812,7 +5812,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                             selectedTools.includes(tool.id) && !isOutOfStock && "bg-blue-50/50",
                             highlightedRow === tool.id && !isOutOfStock && "bg-yellow-50 ring-2 ring-yellow-200 ring-inset"
                           )}
-                          style={isOutOfStock ? { backgroundColor: '#FBDAD7' } : undefined}
+                          style={isOutOfStock ? { backgroundColor: '#FCE4D6' } : undefined}
                         >
                           <TableCell>
                             <input 
