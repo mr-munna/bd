@@ -925,8 +925,8 @@ const UserRoleTable = ({
                   {u.photoURL ? (
                     <img src={u.photoURL} alt={u.displayName} className="w-8 h-8 rounded-full border border-gray-200" referrerPolicy="no-referrer" />
                   ) : (
-                    <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-400">
-                      <LogIn className="w-4 h-4" />
+                    <div className="w-8 h-8 bg-blue-100 text-blue-800 rounded-full flex items-center justify-center text-xs font-bold uppercase border border-blue-200" title={u.displayName}>
+                      {(u.displayName?.[0] || u.email?.[0] || 'U')}
                     </div>
                   )}
                   <div className="flex flex-col">
@@ -2565,31 +2565,44 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
     }
   };
 
-  const handleBackup = () => {
-    const data = {
-      tiles,
-      goods,
-      tools,
-      bookedItems,
-      savedQuotes,
-      sidebarLinks,
-      quoteHeader,
-      quoteTerms,
-      quoteSignature,
-      quoteFooter,
-      quoteColumns,
-      exportedAt: new Date().toISOString()
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `barobi_backup_${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    showStatus('success', 'FULL SYSTEM BACKUP DOWNLOADED SUCCESSFULLY.');
+  const handleBackup = async () => {
+    try {
+      showStatus('info', 'PREPARING FULL BACKUP INVOLVING DELIVERY CHALLANS...');
+      const deliverySnapshot = await getDocs(collection(db, 'delivery_approvals'));
+      const deliveryApprovals = deliverySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      const data = {
+        tiles,
+        goods,
+        tools,
+        bookedItems,
+        savedQuotes,
+        sidebarLinks,
+        quoteHeader,
+        quoteTerms,
+        quoteSignature,
+        quoteFooter,
+        quoteColumns,
+        deliveryApprovals,
+        exportedAt: new Date().toISOString()
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `barobi_backup_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showStatus('success', 'FULL SYSTEM BACKUP (INCLUDING DELIVERY CHALLANS) DOWNLOADED SUCCESSFULLY.');
+    } catch (error: any) {
+      console.error("Backup failed:", error);
+      showStatus('error', `BACKUP FAILED: ${error.message}`);
+    }
   };
 
   const handleRestore = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2676,6 +2689,20 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
               data.savedQuotes.forEach((q: any) => {
                 const cleaned = cleanObj(q, []);
                 batch.set(doc(collection(db, 'savedQuotes')), { ...cleaned, createdAt: new Date() });
+              });
+            }
+
+            // Restore Delivery Approvals
+            if (data.deliveryApprovals) {
+              data.deliveryApprovals.forEach((da: any) => {
+                const cleaned = cleanObj(da, []);
+                if (da.items) {
+                  cleaned.items = da.items;
+                }
+                batch.set(doc(collection(db, 'delivery_approvals')), {
+                  ...cleaned,
+                  createdAt: da.createdAt || new Date().toISOString()
+                });
               });
             }
 
@@ -3508,7 +3535,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
         {user && isApproved && (
           <aside className="w-56 bg-[#0f172a] text-white flex-col hidden md:flex fixed h-full z-50 shadow-2xl border-r border-slate-800">
             <div className="h-16 px-6 flex items-center border-b border-slate-800">
-              <a href="https://www.facebook.com/mavxon" target="_blank" rel="noopener noreferrer" className="flex items-center hover:opacity-80 transition-all group w-fit h-full">
+              <a href="https://www.barobidesign.com.bd" target="_blank" rel="noopener noreferrer" className="flex items-center hover:opacity-80 transition-all group w-fit h-full">
                 <div className="flex items-center bg-white/5 h-12 px-4 rounded-xl border border-white/10 group-hover:border-white/20 transition-all shadow-[inset_0_0_20px_rgba(255,255,255,0.02)]">
                   <MIMSLogo className="text-3xl" />
                 </div>
@@ -3674,9 +3701,11 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                 >
                   {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
                 </button>
-                <div className="flex items-center bg-white/5 h-11 px-3 rounded-lg border border-white/10">
-                  <MIMSLogo className="text-2xl" />
-                </div>
+                <a href="https://www.barobidesign.com.bd" target="_blank" rel="noopener noreferrer" className="flex items-center hover:opacity-80 transition-all">
+                  <div className="flex items-center bg-white/5 h-11 px-3 rounded-lg border border-white/10">
+                    <MIMSLogo className="text-2xl" />
+                  </div>
+                </a>
                 <div className="h-4 w-px bg-slate-700 mx-1"></div>
                 <h2 className="text-sm font-bold text-white tracking-tight truncate max-w-[100px] sm:max-w-[150px]">
                   {activeTab === 'landing' && 'Home'}
@@ -3727,7 +3756,8 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
               <div className="flex items-center gap-3">
                 <div className="hidden sm:flex flex-col items-end">
                   <span className="text-sm font-semibold text-white">{user.displayName}</span>
-                  <span className={cn("text-[10px] font-bold uppercase tracking-wider flex items-center gap-1",
+                  <span className="text-[10px] text-slate-300 font-medium font-mono lowercase">{user.email}</span>
+                  <span className={cn("text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 mt-0.5",
                     isSupremeAdmin ? "text-purple-400" : 
                     isSuperAdmin ? "text-indigo-400" : 
                     isAdmin ? "text-blue-400" : 
@@ -3751,7 +3781,9 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                       }}
                     />
                   ) : (
-                    <LogOut className="w-4 h-4" />
+                    <div className="w-full h-full bg-[#3b82f6] text-white flex items-center justify-center font-bold text-sm uppercase">
+                      {(user.displayName?.[0] || user.email?.[0] || 'U')}
+                    </div>
                   )}
                 </Button>
               </div>
@@ -4231,6 +4263,11 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
               className="bg-white border border-gray-200 p-8 sm:p-12 rounded-3xl text-center space-y-6 shadow-sm max-w-2xl mx-auto my-12"
             >
             <div className="space-y-4">
+              <div className="bg-slate-50 border border-slate-100 rounded-2xl px-5 py-3 text-center inline-block max-w-md mx-auto mb-4">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Logged In Account</p>
+                <p className="text-sm font-bold text-slate-800 font-mono break-all">{user.email}</p>
+              </div>
+
               {isExpired ? (
                 <>
                   <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -4293,7 +4330,9 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                       referrerPolicy="no-referrer"
                     />
                   ) : (
-                    <LogOut className="w-4 h-4" />
+                    <div className="w-5 h-5 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs uppercase">
+                      {(user.displayName?.[0] || user.email?.[0] || 'U')}
+                    </div>
                   )}
                   Logout
                 </Button>
@@ -7269,6 +7308,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
               tiles={tiles}
               goods={goods}
               tools={tools}
+              users={users}
             />
           </div>
         )}
@@ -7843,7 +7883,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
               <a href="mailto:Bijoy.mm112@gmail.com" className="hover:text-[#3B82F6] transition-colors">Bijoy.mm112@gmail.com</a>
             </div>
             <div className="flex-1 text-right flex items-center justify-end gap-1">
-              &copy; 2026 <MIMSLogo className="text-sm" />
+              &copy; 2026 <a href="https://www.barobidesign.com.bd" target="_blank" rel="noopener noreferrer" className="hover:opacity-80 transition-all inline-flex"><MIMSLogo className="text-sm" /></a>
             </div>
           </div>
         </div>

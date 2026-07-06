@@ -48,6 +48,7 @@ interface DeliveryApprovalManagerProps {
   tiles: Tile[];
   goods: Good[];
   tools: Tool[];
+  users?: UserDoc[];
 }
 
 enum OperationType {
@@ -97,6 +98,32 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
   throw new Error(JSON.stringify(errInfo));
 }
 
+export const resolveUserDisplay = (
+  savedName: string | undefined | null,
+  userId: string | undefined | null,
+  usersList: UserDoc[] = []
+): string => {
+  if (!savedName) return '';
+  const cleanName = savedName.replace(/\s*\(Rejected\)/i, '').trim();
+  const isRejected = savedName.toLowerCase().includes('(rejected)');
+
+  if (cleanName && cleanName !== 'Unknown User' && cleanName !== 'Admin' && cleanName !== 'anonymous' && !cleanName.includes('Unknown User')) {
+    return savedName;
+  }
+
+  // Look up by userId
+  if (userId && userId !== 'anonymous') {
+    const matchedUser = usersList.find(u => u.id === userId);
+    if (matchedUser) {
+      const hasRealName = matchedUser.displayName && matchedUser.displayName !== 'Unknown User' && matchedUser.displayName.trim() !== '';
+      const resolved = hasRealName ? matchedUser.displayName : matchedUser.email;
+      return isRejected ? `${resolved} (Rejected)` : resolved;
+    }
+  }
+
+  return savedName;
+};
+
 export const DeliveryApprovalManager: React.FC<DeliveryApprovalManagerProps> = ({
   user,
   currentUserDoc,
@@ -105,7 +132,8 @@ export const DeliveryApprovalManager: React.FC<DeliveryApprovalManagerProps> = (
   isAdmin,
   tiles,
   goods,
-  tools
+  tools,
+  users = []
 }) => {
   const [approvals, setApprovals] = useState<DeliveryApproval[]>([]);
   const [loading, setLoading] = useState(true);
@@ -119,6 +147,7 @@ export const DeliveryApprovalManager: React.FC<DeliveryApprovalManagerProps> = (
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
   const [siteAddress, setSiteAddress] = useState('');
+  const [reference, setReference] = useState('');
   const [remark, setRemark] = useState('');
   
   // Transport & Delivery Challan fields
@@ -316,13 +345,14 @@ export const DeliveryApprovalManager: React.FC<DeliveryApprovalManagerProps> = (
         clientName: clientName.trim() || 'N/A',
         clientPhone: clientPhone.trim() || 'N/A',
         siteAddress: siteAddress.trim() || 'N/A',
+        reference: reference.trim() || 'N/A',
         remark: remark.trim() || 'N/A',
         vehicleNumber: vehicleNumber.trim() || 'N/A',
         driverName: driverName.trim() || 'N/A',
         driverPhone: driverPhone.trim() || 'N/A',
         gatePassNo: gatePassNo.trim() || 'N/A',
         submittedBy: user?.uid || 'anonymous',
-        submittedByName: currentUserDoc?.displayName || user?.email || 'Unknown User',
+        submittedByName: (currentUserDoc?.displayName && currentUserDoc.displayName !== 'Unknown User' && currentUserDoc.displayName.trim() !== '') ? currentUserDoc.displayName : (user?.email || 'Unknown User'),
         createdAt: new Date().toISOString(),
         supremeApproved: false,
         supremeApprovedBy: '',
@@ -342,6 +372,7 @@ export const DeliveryApprovalManager: React.FC<DeliveryApprovalManagerProps> = (
       setClientName('');
       setClientPhone('');
       setSiteAddress('');
+      setReference('');
       setRemark('');
       setVehicleNumber('');
       setDriverName('');
@@ -363,7 +394,7 @@ export const DeliveryApprovalManager: React.FC<DeliveryApprovalManagerProps> = (
       if (!item) return;
 
       const updates: Partial<DeliveryApproval> = {};
-      const approverName = currentUserDoc?.displayName || user?.email || 'Admin';
+      const approverName = (currentUserDoc?.displayName && currentUserDoc.displayName !== 'Unknown User' && currentUserDoc.displayName.trim() !== '') ? currentUserDoc.displayName : (user?.email || 'Admin');
 
       if (role === 'supreme') {
         updates.supremeApproved = true;
@@ -397,7 +428,7 @@ export const DeliveryApprovalManager: React.FC<DeliveryApprovalManagerProps> = (
       const updates: Partial<DeliveryApproval> = {
         status: 'rejected'
       };
-      const approverName = currentUserDoc?.displayName || user?.email || 'Admin';
+      const approverName = (currentUserDoc?.displayName && currentUserDoc.displayName !== 'Unknown User' && currentUserDoc.displayName.trim() !== '') ? currentUserDoc.displayName : (user?.email || 'Admin');
 
       if (role === 'supreme') {
         updates.supremeApproved = false;
@@ -417,6 +448,10 @@ export const DeliveryApprovalManager: React.FC<DeliveryApprovalManagerProps> = (
 
   // Delete Request
   const handleDelete = async (approvalId: string) => {
+    if (!isSupremeAdmin && !isSuperAdmin) {
+      toast.error("Only Supreme and Super Admins are allowed to delete.");
+      return;
+    }
     if (!window.confirm("Are you sure you want to delete this request permanently?")) return;
     try {
       await deleteDoc(doc(db, 'delivery_approvals', approvalId));
@@ -672,9 +707,9 @@ export const DeliveryApprovalManager: React.FC<DeliveryApprovalManagerProps> = (
   <div class="container">
     <div class="header">
       <div>
-        <h2 class="company-title">SUPERIOR TILES & SANITARY</h2>
-        <p class="company-subtitle">Importer, Wholesaler & Retailer of Premium Building Products</p>
-        <p class="company-details">Dhaka, Bangladesh | Phone: +8801700000000 | Email: billing@superior.com</p>
+        <h2 class="company-title">BAROBI DESIGN</h2>
+        <p class="company-subtitle">Importer of Premium Building Products</p>
+        <p class="company-details">Dhaka, Banani, Bangladesh | Tel: +8802 9821286 | Email: barobidesign@bsgrouponline.com</p>
       </div>
       <div class="challan-title-box">
         <h1 class="challan-badge">DELIVERY CHALLAN</h1>
@@ -691,6 +726,7 @@ export const DeliveryApprovalManager: React.FC<DeliveryApprovalManagerProps> = (
         <p class="bold">${item.clientName || 'N/A'}</p>
         <p><span class="bold-label">Phone:</span> ${item.clientPhone || 'N/A'}</p>
         <p><span class="bold-label">Site Address:</span> ${item.siteAddress || 'N/A'}</p>
+        <p><span class="bold-label">Reference:</span> ${item.reference || 'N/A'}</p>
       </div>
 
       <div class="card">
@@ -702,9 +738,9 @@ export const DeliveryApprovalManager: React.FC<DeliveryApprovalManagerProps> = (
 
       <div class="card">
         <h3 class="card-title">ORDER METADATA:</h3>
-        <p><span class="bold-label">Supreme Admin:</span> ${item.supremeApprovedBy || 'Cleared'}</p>
-        <p><span class="bold-label">Super Admin:</span> ${item.superApprovedBy || 'Cleared'}</p>
-        <p><span class="bold-label">Requisition:</span> ${item.submittedByName}</p>
+        <p><span class="bold-label">Supreme Admin:</span> ${resolveUserDisplay(item.supremeApprovedBy, null, users) || 'Cleared'}</p>
+        <p><span class="bold-label">Super Admin:</span> ${resolveUserDisplay(item.superApprovedBy, null, users) || 'Cleared'}</p>
+        <p><span class="bold-label">Requisition:</span> ${resolveUserDisplay(item.submittedByName, item.submittedBy, users)}</p>
       </div>
     </div>
 
@@ -744,15 +780,15 @@ export const DeliveryApprovalManager: React.FC<DeliveryApprovalManagerProps> = (
     <div class="signatures">
       <div>
         <div class="sig-line">PREPARED BY</div>
-        <p class="sig-sub">${item.submittedByName}</p>
+        <p class="sig-sub">${resolveUserDisplay(item.submittedByName, item.submittedBy, users)}</p>
       </div>
       <div>
         <div class="sig-line">SUPER ADMIN APPROVAL</div>
-        <p class="sig-sub">${item.superApprovedBy || 'Cleared'}</p>
+        <p class="sig-sub">${resolveUserDisplay(item.superApprovedBy, null, users) || 'Cleared'}</p>
       </div>
       <div>
         <div class="sig-line">SUPREME ADMIN APPROVAL</div>
-        <p class="sig-sub">${item.supremeApprovedBy || 'Cleared'}</p>
+        <p class="sig-sub">${resolveUserDisplay(item.supremeApprovedBy, null, users) || 'Cleared'}</p>
       </div>
       <div>
         <div class="sig-line">RECEIVER SIGNATURE</div>
@@ -789,7 +825,7 @@ export const DeliveryApprovalManager: React.FC<DeliveryApprovalManagerProps> = (
               <Truck className="w-8 h-8 text-blue-400" /> Delivery Approval Center
             </h1>
             <p className="text-blue-100 text-sm max-w-xl">
-              Submit product deliveries for Super & Supreme Admin authorizations. Print/Download approved challans instantly.
+              Submit product deliveries for authorizations. Print/Download approved challans instantly.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -982,6 +1018,17 @@ export const DeliveryApprovalManager: React.FC<DeliveryApprovalManagerProps> = (
                   placeholder="Enter site address..."
                   value={siteAddress}
                   onChange={(e) => setSiteAddress(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-gray-700 block">Reference</label>
+                <input
+                  type="text"
+                  placeholder="Enter reference..."
+                  value={reference}
+                  onChange={(e) => setReference(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
@@ -1214,6 +1261,12 @@ export const DeliveryApprovalManager: React.FC<DeliveryApprovalManagerProps> = (
                           <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                           <span className="truncate"><span className="text-slate-400">Site:</span> {item.siteAddress || 'N/A'}</span>
                         </div>
+                        {item.reference && item.reference !== 'N/A' && (
+                          <div className="flex items-center gap-1.5 col-span-1 sm:col-span-3 border-t border-slate-200/50 pt-1.5">
+                            <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span className="truncate"><span className="text-slate-400">Reference:</span> {item.reference}</span>
+                          </div>
+                        )}
                       </div>
 
                       {/* Transport Details */}
@@ -1240,7 +1293,7 @@ export const DeliveryApprovalManager: React.FC<DeliveryApprovalManagerProps> = (
                       {/* Submitted by details */}
                       <div className="text-[10px] text-gray-400 font-medium flex items-center gap-1">
                         <span>Submitted by:</span>
-                        <span className="font-bold text-gray-600">{item.submittedByName}</span>
+                        <span className="font-bold text-gray-600">{resolveUserDisplay(item.submittedByName, item.submittedBy, users)}</span>
                         {item.remark && item.remark !== 'N/A' && (
                           <span className="italic text-gray-500 border-l border-gray-200 pl-2 ml-2">"{item.remark}"</span>
                         )}
@@ -1364,7 +1417,7 @@ export const DeliveryApprovalManager: React.FC<DeliveryApprovalManagerProps> = (
                         )}
 
                         {/* Delete Button (Super Admin / Supreme Admin only) */}
-                        {isSuperAdmin && (
+                        {(isSuperAdmin || isSupremeAdmin) && (
                           <button
                             onClick={() => handleDelete(item.id)}
                             className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg border border-transparent hover:border-red-100 transition-colors"
@@ -1414,9 +1467,9 @@ export const DeliveryApprovalManager: React.FC<DeliveryApprovalManagerProps> = (
           {/* Header */}
           <div className="flex justify-between items-start border-b-2 border-gray-900 pb-6">
             <div className="space-y-1.5">
-              <h2 className="text-2xl font-black tracking-tight uppercase">SUPERIOR TILES & SANITARY</h2>
-              <p className="text-xs text-gray-600 font-medium">Importer, Wholesaler & Retailer of Premium Building Products</p>
-              <p className="text-[10px] text-gray-500">Dhaka, Bangladesh | Phone: +8801700000000 | Email: billing@superior.com</p>
+              <h2 className="text-2xl font-black tracking-tight uppercase">BAROBI DESIGN</h2>
+              <p className="text-xs text-gray-600 font-medium">Importer of Premium Building Products</p>
+              <p className="text-[10px] text-gray-500">Dhaka, Banani, Bangladesh | Tel: +8802 9821286 | Email: barobidesign@bsgrouponline.com</p>
             </div>
             <div className="text-right space-y-1">
               <h1 className="text-xl font-black text-gray-800 uppercase tracking-widest bg-gray-100 px-3 py-1.5 rounded-lg border border-gray-200">
@@ -1434,6 +1487,7 @@ export const DeliveryApprovalManager: React.FC<DeliveryApprovalManagerProps> = (
               <p className="font-bold text-gray-900">{previewApproval.clientName || 'N/A'}</p>
               <p className="text-gray-600 font-medium"><span className="font-bold">Phone:</span> {previewApproval.clientPhone || 'N/A'}</p>
               <p className="text-gray-600 font-medium"><span className="font-bold">Site Address:</span> {previewApproval.siteAddress || 'N/A'}</p>
+              <p className="text-gray-600 font-medium"><span className="font-bold">Reference:</span> {previewApproval.reference || 'N/A'}</p>
             </div>
 
             <div className="space-y-2 bg-gray-50 p-4 rounded-xl border border-gray-100">
@@ -1445,9 +1499,9 @@ export const DeliveryApprovalManager: React.FC<DeliveryApprovalManagerProps> = (
 
             <div className="space-y-2 bg-gray-50 p-4 rounded-xl border border-gray-100">
               <h3 className="font-extrabold text-gray-900 uppercase tracking-wide border-b border-gray-200 pb-1">ORDER METADATA:</h3>
-              <p className="text-gray-600 font-medium"><span className="font-bold text-gray-850">Supreme Admin:</span> {previewApproval.supremeApprovedBy || 'Pending'}</p>
-              <p className="text-gray-600 font-medium"><span className="font-bold text-gray-850">Super Admin:</span> {previewApproval.superApprovedBy || 'Pending'}</p>
-              <p className="text-gray-600 font-medium"><span className="font-bold text-gray-850">Requisition:</span> {previewApproval.submittedByName}</p>
+              <p className="text-gray-600 font-medium"><span className="font-bold text-gray-850">Supreme Admin:</span> {resolveUserDisplay(previewApproval.supremeApprovedBy, null, users) || 'Pending'}</p>
+              <p className="text-gray-600 font-medium"><span className="font-bold text-gray-850">Super Admin:</span> {resolveUserDisplay(previewApproval.superApprovedBy, null, users) || 'Pending'}</p>
+              <p className="text-gray-600 font-medium"><span className="font-bold text-gray-850">Requisition:</span> {resolveUserDisplay(previewApproval.submittedByName, previewApproval.submittedBy, users)}</p>
             </div>
           </div>
 
@@ -1503,15 +1557,15 @@ export const DeliveryApprovalManager: React.FC<DeliveryApprovalManagerProps> = (
           <div className="grid grid-cols-4 gap-4 text-center text-[10px] pt-16 mt-16 border-t border-gray-200">
             <div className="space-y-1">
               <div className="border-t border-gray-400 pt-1.5 font-bold text-gray-700 uppercase tracking-wide">PREPARED BY</div>
-              <p className="text-gray-500 font-mono text-[9px]">{previewApproval.submittedByName}</p>
+              <p className="text-gray-500 font-mono text-[9px]">{resolveUserDisplay(previewApproval.submittedByName, previewApproval.submittedBy, users)}</p>
             </div>
             <div className="space-y-1">
               <div className="border-t border-gray-400 pt-1.5 font-bold text-gray-700 uppercase tracking-wide">SUPER ADMIN APPROVAL</div>
-              <p className="text-gray-500 font-mono text-[9px]">{previewApproval.superApprovedBy || 'Cleared'}</p>
+              <p className="text-gray-500 font-mono text-[9px]">{resolveUserDisplay(previewApproval.superApprovedBy, null, users) || 'Cleared'}</p>
             </div>
             <div className="space-y-1">
               <div className="border-t border-gray-400 pt-1.5 font-bold text-gray-700 uppercase tracking-wide">SUPREME ADMIN APPROVAL</div>
-              <p className="text-gray-500 font-mono text-[9px]">{previewApproval.supremeApprovedBy || 'Cleared'}</p>
+              <p className="text-gray-500 font-mono text-[9px]">{resolveUserDisplay(previewApproval.supremeApprovedBy, null, users) || 'Cleared'}</p>
             </div>
             <div className="space-y-1">
               <div className="border-t border-gray-400 pt-1.5 font-bold text-gray-700 uppercase tracking-wide">RECEIVER SIGNATURE</div>

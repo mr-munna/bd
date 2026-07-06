@@ -87,6 +87,7 @@ export interface DeliveryApproval {
   clientName?: string;
   clientPhone?: string;
   siteAddress?: string;
+  reference?: string;
   remark?: string;
   vehicleNumber?: string;
   driverName?: string;
