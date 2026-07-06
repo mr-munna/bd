@@ -182,6 +182,52 @@
         "revision": { "type": "number" }
       },
       "required": ["id", "type", "billNumber", "recipientName", "grandTotal"]
+    },
+    "DeliveryApproval": {
+      "title": "DeliveryApproval",
+      "description": "A delivery approval document for supreme & super admin review.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "productCode": { "type": "string" },
+        "productName": { "type": "string" },
+        "size": { "type": "string" },
+        "brand": { "type": "string" },
+        "quantity": { "type": "number" },
+        "unit": { "type": "string" },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "productCode": { "type": "string" },
+              "productName": { "type": "string" },
+              "size": { "type": "string" },
+              "brand": { "type": "string" },
+              "quantity": { "type": "number" },
+              "unit": { "type": "string" }
+            },
+            "required": ["productCode", "productName", "quantity", "unit"]
+          }
+        },
+        "clientName": { "type": "string" },
+        "clientPhone": { "type": "string" },
+        "siteAddress": { "type": "string" },
+        "remark": { "type": "string" },
+        "vehicleNumber": { "type": "string" },
+        "driverName": { "type": "string" },
+        "driverPhone": { "type": "string" },
+        "gatePassNo": { "type": "string" },
+        "submittedBy": { "type": "string" },
+        "submittedByName": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "supremeApproved": { "type": "boolean" },
+        "supremeApprovedBy": { "type": "string" },
+        "superApproved": { "type": "boolean" },
+        "superApprovedBy": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id"]
     }
   },
   "firestore": {
@@ -220,6 +266,10 @@
     "/billing_records": {
       "schema": "BillingRecord",
       "description": "Billing/Quotation documents"
+    },
+    "/delivery_approvals": {
+      "schema": "DeliveryApproval",
+      "description": "Delivery approval requests"
     }
   }
 }

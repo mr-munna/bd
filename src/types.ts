@@ -61,10 +61,46 @@ export interface BookedItem {
 }
 
 export type Category = 'tiles' | 'goods' | 'tools' | 'bookedItems';
-export type Tab = 'landing' | 'search' | 'master' | 'booked' | 'stock' | 'quote' | 'master_sheet' | 'users' | 'view_quote' | 'sales' | 'settings' | 'billing';
+export type Tab = 'landing' | 'search' | 'master' | 'booked' | 'stock' | 'quote' | 'master_sheet' | 'users' | 'view_quote' | 'sales' | 'settings' | 'billing' | 'delivery_approval';
 
 export type UserRole = 'supreme_admin' | 'super_admin' | 'admin' | 'user' | 'guest';
 export type UserStatus = 'pending' | 'approved' | 'rejected';
+
+export interface DeliveryApprovalItem {
+  productCode: string;
+  productName: string;
+  size?: string;
+  brand?: string;
+  quantity: number;
+  unit: string;
+}
+
+export interface DeliveryApproval {
+  id: string;
+  productCode?: string;
+  productName?: string;
+  size?: string;
+  brand?: string;
+  quantity?: number;
+  unit?: string;
+  items?: DeliveryApprovalItem[];
+  clientName?: string;
+  clientPhone?: string;
+  siteAddress?: string;
+  remark?: string;
+  vehicleNumber?: string;
+  driverName?: string;
+  driverPhone?: string;
+  gatePassNo?: string;
+  submittedBy: string;
+  submittedByName: string;
+  createdAt: any;
+  supremeApproved: boolean;
+  supremeApprovedBy?: string;
+  superApproved: boolean;
+  superApprovedBy?: string;
+  status: 'pending' | 'partially_approved' | 'approved' | 'rejected';
+}
 
 export interface UserDoc {
   id: string;

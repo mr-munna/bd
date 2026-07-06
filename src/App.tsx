@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useMemo, Component, useRef } from 'react';
 import { SalesManager } from './Sales';
 import { BillingManager } from './components/Billing';
+import { DeliveryApprovalManager } from './components/DeliveryApprovalManager';
 import { 
   Search, 
   Plus, 
@@ -2140,7 +2141,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
 
   // Data listeners
   useEffect(() => {
-    if (!isAuthReady || !user || !isApproved) return;
+    if (!isAuthReady || !user || !currentUserDoc || !isApproved) return;
 
     const unsubTiles = onSnapshot(query(collection(db, 'tiles'), orderBy('name')), (snap) => {
       setTiles(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Tile)));
@@ -2204,7 +2205,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
       unsubMasterLog();
       unsubBookedLog();
     };
-  }, [isAuthReady, user, isApproved]);
+  }, [isAuthReady, user, currentUserDoc, isApproved]);
 
   const logPageChange = async (category: string) => {
     try {
@@ -3593,6 +3594,17 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   <FileText className="w-5 h-5 text-emerald-400" /> Billing / Quotation
                 </button>
               )}
+              {isFullyApproved && (
+                <button
+                  onClick={() => setActiveTab('delivery_approval')}
+                  className={cn(
+                    "w-full px-4 py-3 rounded-xl font-medium transition-all flex items-center justify-start gap-3 uppercase tracking-wider text-sm text-left",
+                    activeTab === 'delivery_approval' ? "bg-white text-[#0f172a] font-bold shadow-sm" : "text-slate-300 hover:bg-white/10 hover:text-white"
+                  )}
+                >
+                  <Truck className="w-5 h-5 text-blue-400" /> Delivery Approval
+                </button>
+              )}
               {isAdmin && (
                 <button
                   onClick={() => setActiveTab('master_sheet')}
@@ -3854,6 +3866,17 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     )}
                   >
                     <FileText className="w-5 h-5" /> Billing / Quotation
+                  </button>
+                )}
+                {isFullyApproved && (
+                  <button
+                    onClick={() => { setActiveTab('delivery_approval'); setIsMenuOpen(false); }}
+                    className={cn(
+                      "w-full px-4 py-3 rounded-xl font-medium flex items-center gap-3 uppercase tracking-wider text-sm",
+                      activeTab === 'delivery_approval' ? "bg-[#0f172a] text-white font-bold" : "text-gray-500 hover:bg-gray-50"
+                    )}
+                  >
+                    <Truck className="w-5 h-5" /> Delivery Approval
                   </button>
                 )}
                 {isAdmin && (
@@ -7231,6 +7254,21 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
               user={user} 
               currentUserDoc={currentUserDoc} 
               isApproved={isFullyApproved} 
+            />
+          </div>
+        )}
+
+        {activeTab === 'delivery_approval' && (
+          <div className="w-full">
+            <DeliveryApprovalManager
+              user={user}
+              currentUserDoc={currentUserDoc}
+              isSupremeAdmin={isSupremeAdmin}
+              isSuperAdmin={isSuperAdmin}
+              isAdmin={isAdmin}
+              tiles={tiles}
+              goods={goods}
+              tools={tools}
             />
           </div>
         )}
