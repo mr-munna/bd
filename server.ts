@@ -232,8 +232,8 @@ app.post("/api/notify", async (req, res) => {
     const userEmail = details?.userEmail || 'Unknown';
     const userName = details?.userName || 'Unknown User';
 
-    const subject = `${isMaster ? '[MASTER SHEET] ' : ''}Inventory Update: ${action.toUpperCase()} - ${category.toUpperCase()}`;
-    const text = `
+    const subject = req.body.customSubject || `${isMaster ? '[MASTER SHEET] ' : ''}Inventory Update: ${action.toUpperCase()} - ${category.toUpperCase()}`;
+    const text = req.body.customText || `
       Inventory Notification:
       ${isMaster ? 'CRITICAL: Action performed in MASTER SHEET' : ''}
       
@@ -250,12 +250,23 @@ app.post("/api/notify", async (req, res) => {
       This is an automated notification from the Inventory Management System.
     `;
 
-    const mailOptions = {
+    const mailOptions: any = {
       from: process.env.EMAIL_USER,
       to: approvedEmails.join(', '),
       subject: subject,
       text: text,
     };
+
+    if (req.body.pdfAttachment && req.body.pdfAttachment.base64) {
+      console.log(`Attaching PDF: ${req.body.pdfAttachment.filename || 'Delivery_Request_Details.pdf'}`);
+      mailOptions.attachments = [
+        {
+          filename: req.body.pdfAttachment.filename || 'Delivery_Request_Details.pdf',
+          content: Buffer.from(req.body.pdfAttachment.base64, 'base64'),
+          contentType: 'application/pdf'
+        }
+      ];
+    }
 
     console.log("Attempting to send email...");
     if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
