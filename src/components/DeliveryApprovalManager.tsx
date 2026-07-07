@@ -866,9 +866,12 @@ export const DeliveryApprovalManager: React.FC<DeliveryApprovalManagerProps> = (
       const item = approvals.find(a => a.id === approvalId);
       await deleteDoc(doc(db, 'delivery_approvals', approvalId));
       toast.success("Request deleted successfully");
+      // Per user request, deleting an approved delivery challan should NOT add back the product's quantity.
+      /*
       if (item && item.status === 'approved') {
         await addStockBack(item);
       }
+      */
     } catch (error: any) {
       toast.error(`Deletion failed: ${error.message}`);
       handleFirestoreError(error, OperationType.DELETE, `delivery_approvals/${approvalId}`);

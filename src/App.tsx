@@ -957,7 +957,7 @@ const UserRoleTable = ({
                   <div className="flex flex-col gap-2">
                     <select
                       value={u.email === 'bijoymahmudmunna@gmail.com' ? 'supreme_admin' : u.role}
-                      disabled={!isAppOwner || ['bijoymahmudmunna@gmail.com'].includes(u.email)}
+                      disabled={['bijoymahmudmunna@gmail.com'].includes(u.email)}
                       onChange={(e) => onUpdateRole(u.id, e.target.value as UserRole)}
                       className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white disabled:bg-gray-50 disabled:text-gray-400"
                     >
@@ -969,7 +969,7 @@ const UserRoleTable = ({
                     </select>
                     <select
                       value={u.status}
-                      disabled={!isAppOwner || ['bijoy.mm112@gmail.com'].includes(u.email)}
+                      disabled={['bijoymahmudmunna@gmail.com', 'bijoy.mm112@gmail.com'].includes(u.email)}
                       onChange={(e) => onUpdateStatus(u.id, e.target.value)}
                       className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white disabled:bg-gray-50 disabled:text-gray-400"
                     >
