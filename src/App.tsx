@@ -895,129 +895,137 @@ const UserRoleTable = ({
   onDelete: (id: string) => void,
   currentUser: any,
   roleColor: string
-}) => (
-  <div className="space-y-4">
-    <div className="flex items-center gap-2 px-2">
-      <div className={cn("w-2 h-6 rounded-full bg-current", roleColor)} />
-      <h3 className="text-lg font-bold text-gray-800">{title}</h3>
-      <span className="text-xs font-medium text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-        {users.length}
-      </span>
-    </div>
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-auto max-h-[60vh] md:max-h-[70vh] overscroll-auto">
-      <table className="w-full border-separate border-spacing-0 min-w-[1000px]">
-        <thead>
-          <tr>
-            <TableHeader align="center">SL</TableHeader>
-            <TableHeader>User Info</TableHeader>
-            <TableHeader>Email</TableHeader>
-            <TableHeader align="center">Role & Status</TableHeader>
-            <TableHeader align="center">Expiry Date</TableHeader>
-            <TableHeader align="center">Actions</TableHeader>
-          </tr>
-        </thead>
-        <tbody>
-          {users.map((u, index) => (
-            <tr key={u.id} className="hover:bg-gray-50 transition-colors">
-              <TableCell align="center" style={{ color: BLUE_COLOR }} className="font-mono text-xs">{index + 1}</TableCell>
-              <TableCell>
-                <div className="flex items-center gap-3">
-                  {u.photoURL ? (
-                    <img src={u.photoURL} alt={u.displayName} className="w-8 h-8 rounded-full border border-gray-200" referrerPolicy="no-referrer" />
-                  ) : (
-                    <div className="w-8 h-8 bg-blue-100 text-blue-800 rounded-full flex items-center justify-center text-xs font-bold uppercase border border-blue-200" title={u.displayName}>
-                      {(u.displayName?.[0] || u.email?.[0] || 'U')}
+}) => {
+  const isAppOwner = currentUser?.email === 'bijoymahmudmunna@gmail.com';
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 px-2">
+        <div className={cn("w-2 h-6 rounded-full bg-current", roleColor)} />
+        <h3 className="text-lg font-bold text-gray-800">{title}</h3>
+        <span className="text-xs font-medium text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+          {users.length}
+        </span>
+      </div>
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-auto max-h-[60vh] md:max-h-[70vh] overscroll-auto">
+        <table className="w-full border-separate border-spacing-0 min-w-[1000px]">
+          <thead>
+            <tr>
+              <TableHeader align="center">SL</TableHeader>
+              <TableHeader>User Info</TableHeader>
+              <TableHeader>Email</TableHeader>
+              <TableHeader align="center">Role & Status</TableHeader>
+              {isAppOwner && <TableHeader align="center">Expiry Date</TableHeader>}
+              {isAppOwner && <TableHeader align="center">Actions</TableHeader>}
+            </tr>
+          </thead>
+          <tbody>
+            {users.map((u, index) => (
+              <tr key={u.id} className="hover:bg-gray-50 transition-colors">
+                <TableCell align="center" style={{ color: BLUE_COLOR }} className="font-mono text-xs">{index + 1}</TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-3">
+                    {u.photoURL ? (
+                      <img src={u.photoURL} alt={u.displayName} className="w-8 h-8 rounded-full border border-gray-200" referrerPolicy="no-referrer" />
+                    ) : (
+                      <div className="w-8 h-8 bg-blue-100 text-blue-800 rounded-full flex items-center justify-center text-xs font-bold uppercase border border-blue-200" title={u.displayName}>
+                        {(u.displayName?.[0] || u.email?.[0] || 'U')}
+                      </div>
+                    )}
+                    <div className="flex flex-col">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-gray-900">{u.displayName}</span>
+                        {u.email === 'bijoymahmudmunna@gmail.com' && (
+                          <span className="bg-purple-100 text-purple-700 text-[8px] font-normal px-1.5 py-0.5 rounded-full border border-purple-200 flex items-center gap-0.5">
+                            <ShieldCheck className="w-2 h-2" /> SUPREME
+                          </span>
+                        )}
+                      </div>
+                      <span className={cn(
+                        "text-[10px] px-1.5 py-0.5 rounded-full w-fit font-normal uppercase",
+                        u.status === 'approved' ? "bg-green-100 text-green-700" :
+                        u.status === 'pending' ? "bg-yellow-100 text-yellow-700" :
+                        "bg-red-100 text-red-700"
+                      )}>
+                        {u.status}
+                      </span>
                     </div>
-                  )}
-                  <div className="flex flex-col">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-gray-900">{u.displayName}</span>
-                      {u.email === 'bijoymahmudmunna@gmail.com' && (
-                        <span className="bg-purple-100 text-purple-700 text-[8px] font-normal px-1.5 py-0.5 rounded-full border border-purple-200 flex items-center gap-0.5">
-                          <ShieldCheck className="w-2 h-2" /> SUPREME
+                  </div>
+                </TableCell>
+                <TableCell className="text-gray-600">{u.email}</TableCell>
+                <TableCell align="center">
+                  <div className="flex flex-col gap-2">
+                    <select
+                      value={u.email === 'bijoymahmudmunna@gmail.com' ? 'supreme_admin' : u.role}
+                      disabled={!isAppOwner || ['bijoymahmudmunna@gmail.com'].includes(u.email)}
+                      onChange={(e) => onUpdateRole(u.id, e.target.value as UserRole)}
+                      className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white disabled:bg-gray-50 disabled:text-gray-400"
+                    >
+                      <option value="guest">Guest</option>
+                      <option value="user">User</option>
+                      <option value="admin">Admin</option>
+                      <option value="super_admin">Super Admin</option>
+                      <option value="supreme_admin">Administrator</option>
+                    </select>
+                    <select
+                      value={u.status}
+                      disabled={!isAppOwner || ['bijoy.mm112@gmail.com'].includes(u.email)}
+                      onChange={(e) => onUpdateStatus(u.id, e.target.value)}
+                      className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white disabled:bg-gray-50 disabled:text-gray-400"
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="approved">Approved</option>
+                      <option value="rejected">Rejected</option>
+                    </select>
+                  </div>
+                </TableCell>
+                {isAppOwner && (
+                  <TableCell align="center">
+                    <div className="flex flex-col gap-2">
+                      <input 
+                        type="date"
+                        value={u.expiryDate || ''}
+                        disabled={['bijoy.mm112@gmail.com'].includes(u.email)}
+                        onChange={(e) => onUpdateExpiry(u.id, e.target.value)}
+                        className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white disabled:bg-gray-50 disabled:text-gray-400"
+                      />
+                      {u.expiryDate && (
+                        <span className={cn(
+                          "text-[10px] font-normal uppercase",
+                          new Date(u.expiryDate) < new Date() ? "text-red-500" : "text-green-600"
+                        )}>
+                          {new Date(u.expiryDate) < new Date() ? 'Expired' : 'Active'}
                         </span>
                       )}
                     </div>
-                    <span className={cn(
-                      "text-[10px] px-1.5 py-0.5 rounded-full w-fit font-normal uppercase",
-                      u.status === 'approved' ? "bg-green-100 text-green-700" :
-                      u.status === 'pending' ? "bg-yellow-100 text-yellow-700" :
-                      "bg-red-100 text-red-700"
-                    )}>
-                      {u.status}
-                    </span>
-                  </div>
-                </div>
-              </TableCell>
-              <TableCell className="text-gray-600">{u.email}</TableCell>
-              <TableCell align="center">
-                <div className="flex flex-col gap-2">
-                  <select
-                    value={u.email === 'bijoymahmudmunna@gmail.com' ? 'supreme_admin' : u.role}
-                    disabled={['bijoymahmudmunna@gmail.com'].includes(u.email)}
-                    onChange={(e) => onUpdateRole(u.id, e.target.value as UserRole)}
-                    className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white disabled:bg-gray-50 disabled:text-gray-400"
-                  >
-                    <option value="guest">Guest</option>
-                    <option value="user">User</option>
-                    <option value="admin">Admin</option>
-                    <option value="super_admin">Super Admin</option>
-                    <option value="supreme_admin">Administrator</option>
-                  </select>
-                  <select
-                    value={u.status}
-                    disabled={['bijoy.mm112@gmail.com'].includes(u.email)}
-                    onChange={(e) => onUpdateStatus(u.id, e.target.value)}
-                    className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white disabled:bg-gray-50 disabled:text-gray-400"
-                  >
-                    <option value="pending">Pending</option>
-                    <option value="approved">Approved</option>
-                    <option value="rejected">Rejected</option>
-                  </select>
-                </div>
-              </TableCell>
-              <TableCell align="center">
-                <div className="flex flex-col gap-2">
-                  <input 
-                    type="date"
-                    value={u.expiryDate || ''}
-                    disabled={['bijoy.mm112@gmail.com'].includes(u.email)}
-                    onChange={(e) => onUpdateExpiry(u.id, e.target.value)}
-                    className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white disabled:bg-gray-50 disabled:text-gray-400"
-                  />
-                  {u.expiryDate && (
-                    <span className={cn(
-                      "text-[10px] font-normal uppercase",
-                      new Date(u.expiryDate) < new Date() ? "text-red-500" : "text-green-600"
-                    )}>
-                      {new Date(u.expiryDate) < new Date() ? 'Expired' : 'Active'}
-                    </span>
-                  )}
-                </div>
-              </TableCell>
-              <TableCell align="center">
-                <button
-                  disabled={['bijoymahmudmunna@gmail.com'].includes(u.email) || u.id === currentUser?.uid}
-                  onClick={() => onDelete(u.id)}
-                  className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-30"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </TableCell>
-            </tr>
-          ))}
-          {users.length === 0 && (
-            <tr>
-              <td colSpan={6} className="p-8 text-center text-gray-400 italic text-sm">
-                No users found in this category
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+                  </TableCell>
+                )}
+                {isAppOwner && (
+                  <TableCell align="center">
+                    <button
+                      disabled={['bijoymahmudmunna@gmail.com'].includes(u.email) || u.id === currentUser?.uid}
+                      onClick={() => onDelete(u.id)}
+                      className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-30"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </TableCell>
+                )}
+              </tr>
+            ))}
+            {users.length === 0 && (
+              <tr>
+                <td colSpan={isAppOwner ? 6 : 4} className="p-8 text-center text-gray-400 italic text-sm">
+                  No users found in this category
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const TableCell = ({ children, className, align = 'left', style }: { children?: React.ReactNode; className?: string; align?: 'left' | 'center' | 'right'; style?: React.CSSProperties }) => (
   <td 
@@ -1495,6 +1503,9 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
   const isFullyApproved = isSuperAdmin || (currentUserDoc?.status === 'approved' && !isExpired && currentUserDoc?.role !== 'guest');
   const isApproved = !!user?.emailVerified && (isFullyApproved || ['landing', 'stock', 'home'].includes(activeTab));
 
+  const canSeeBilling = isFullyApproved && currentUserDoc?.role !== 'admin';
+  const canDeleteMasterItems = isAdmin && currentUserDoc?.role !== 'admin';
+
   useEffect(() => {
     if (activeTab !== 'quote' || !bodyRef.current) return;
 
@@ -1969,8 +1980,11 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
       if ((activeTab === 'quote' || activeTab === 'sales') && !isSupremeAdmin) {
         setActiveTab('landing');
       }
+      if (activeTab === 'billing' && (!isFullyApproved || currentUserDoc?.role === 'admin')) {
+        setActiveTab('landing');
+      }
     }
-  }, [activeTab, isAdmin, isSupremeAdmin, isAuthReady, user]);
+  }, [activeTab, isAdmin, isSupremeAdmin, isFullyApproved, currentUserDoc, isAuthReady, user]);
 
   // For regular users, default stockSubTab to 'tiles' and prevent selecting 'all'
   useEffect(() => {
@@ -2974,7 +2988,10 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
     if ((activeTab === 'quote' || activeTab === 'sales') && !isSupremeAdmin) {
       setActiveTab('landing');
     }
-  }, [activeTab, isAdmin, isSupremeAdmin]);
+    if (activeTab === 'billing' && (!isFullyApproved || currentUserDoc?.role === 'admin')) {
+      setActiveTab('landing');
+    }
+  }, [activeTab, isAdmin, isSupremeAdmin, isFullyApproved, currentUserDoc]);
 
   useEffect(() => {
     setShowOutOfStockOnly(false);
@@ -3026,6 +3043,11 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
   };
 
   const handleDeleteItem = async (collectionName: string, id: string) => {
+    if (currentUserDoc?.role === 'admin' && (collectionName === 'tiles' || collectionName === 'goods' || collectionName === 'tools')) {
+      showStatus('error', 'You do not have permission to delete items from the Master Sheet.');
+      return;
+    }
+
     const item = [...tiles, ...goods, ...tools, ...bookedItems].find(i => i.id === id);
     const itemName = (item as any)?.name || (item as any)?.code || (item as any)?.details || id;
 
@@ -3080,6 +3102,11 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
   };
 
   const handleClearAll = async (collectionName: string) => {
+    if (currentUserDoc?.role === 'admin' && (collectionName === 'tiles' || collectionName === 'goods' || collectionName === 'tools')) {
+      showStatus('error', 'You do not have permission to clear items from the Master Sheet.');
+      return;
+    }
+
     setConfirmAction({
       title: `Clear All ${collectionName}`,
       message: `Are you sure you want to remove ALL items in ${collectionName} from active inventory? They will still be visible in the Master Sheet.`,
@@ -3129,6 +3156,11 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
   };
 
   const handleDeleteSelected = async (collectionName: string) => {
+    if (currentUserDoc?.role === 'admin' && (collectionName === 'tiles' || collectionName === 'goods' || collectionName === 'tools')) {
+      showStatus('error', 'You do not have permission to delete items from the Master Sheet.');
+      return;
+    }
+
     const selectedIds = 
       collectionName === 'tiles' ? selectedTiles :
       collectionName === 'goods' ? selectedGoods :
@@ -3782,7 +3814,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   </button>
                 </>
               )}
-              {isFullyApproved && (
+              {canSeeBilling && (
                 <button
                   onClick={() => setActiveTab('billing')}
                   className={cn(
@@ -4061,7 +4093,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     </button>
                   </>
                 )}
-                {isFullyApproved && (
+                {canSeeBilling && (
                   <button
                     onClick={() => { setActiveTab('billing'); setIsMenuOpen(false); }}
                     className={cn(
@@ -4648,7 +4680,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   <ShieldCheck className="w-6 h-6 text-[#0f172a]" />
                   User Management
                   <span className="text-sm font-normal text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-                    {users.length} Total
+                    {users.filter(u => user?.email === 'bijoymahmudmunna@gmail.com' || u.email !== 'bijoymahmudmunna@gmail.com').length} Total
                   </span>
                 </h2>
               </div>
@@ -4657,7 +4689,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
               <UserRoleTable 
                 title="Administrators" 
                 roleColor="text-purple-600"
-                users={users.filter(u => u.role === 'supreme_admin' || u.email === 'bijoymahmudmunna@gmail.com')} 
+                users={users.filter(u => (u.role === 'supreme_admin' || u.email === 'bijoymahmudmunna@gmail.com') && (user?.email === 'bijoymahmudmunna@gmail.com' || u.email !== 'bijoymahmudmunna@gmail.com'))} 
                 onUpdateRole={async (id, role) => {
                   try {
                     await updateDoc(doc(db, 'users', id), { role });
@@ -5111,7 +5143,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                 <div className="flex gap-2">
                   {isAdmin && (activeTab === 'master' || activeTab === 'master_sheet') && (
                     <div className="flex items-center gap-2">
-                      {selectedTiles.length > 0 && (
+                      {canDeleteMasterItems && selectedTiles.length > 0 && (
                         <Button 
                           variant="danger" 
                           size="sm" 
@@ -5157,14 +5189,16 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                                   >
                                     <Edit className="w-3.5 h-3.5" /> Edit
                                   </Button>
-                                  <Button 
-                                    variant="outline" 
-                                    size="sm" 
-                                    onClick={() => handleDeleteItem('tiles', highlightedRow)}
-                                    className="text-red-600 border-red-200 hover:bg-red-50"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" /> Delete
-                                  </Button>
+                                  {canDeleteMasterItems && (
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm" 
+                                      onClick={() => handleDeleteItem('tiles', highlightedRow)}
+                                      className="text-red-600 border-red-200 hover:bg-red-50"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" /> Delete
+                                    </Button>
+                                  )}
                                 </>
                               )}
                             </div>
@@ -5485,14 +5519,16 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                                          Edit
                                        </Button>
                                      )}
-                                     <Button 
-                                       variant="outline" 
-                                       size="sm" 
-                                       className="text-red-600 border-red-200 hover:bg-red-50"
-                                       onClick={() => handleDeleteItem('tiles', tile.id)}
-                                     >
-                                       Delete
-                                     </Button>
+                                     {canDeleteMasterItems && (
+                                       <Button 
+                                         variant="outline" 
+                                         size="sm" 
+                                         className="text-red-600 border-red-200 hover:bg-red-50"
+                                         onClick={() => handleDeleteItem('tiles', tile.id)}
+                                       >
+                                         Delete
+                                       </Button>
+                                     )}
                                    </>
                                  )}
                                </div>
@@ -5561,7 +5597,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                 <div className="flex gap-2">
                   {isAdmin && (activeTab === 'master' || activeTab === 'master_sheet') && (
                     <div className="flex items-center gap-2">
-                      {selectedGoods.length > 0 && (
+                      {canDeleteMasterItems && selectedGoods.length > 0 && (
                         <Button 
                           variant="danger" 
                           size="sm" 
@@ -5607,14 +5643,16 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                                   >
                                     <Edit className="w-3.5 h-3.5" /> Edit
                                   </Button>
-                                  <Button 
-                                    variant="outline" 
-                                    size="sm" 
-                                    onClick={() => handleDeleteItem('goods', highlightedRow)}
-                                    className="text-red-600 border-red-200 hover:bg-red-50"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" /> Delete
-                                  </Button>
+                                  {canDeleteMasterItems && (
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm" 
+                                      onClick={() => handleDeleteItem('goods', highlightedRow)}
+                                      className="text-red-600 border-red-200 hover:bg-red-50"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" /> Delete
+                                    </Button>
+                                  )}
                                 </>
                               )}
                             </div>
@@ -5864,14 +5902,16 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                                         Edit
                                       </Button>
                                     )}
-                                    <Button 
-                                      variant="outline" 
-                                      size="sm" 
-                                      className="text-red-600 border-red-200 hover:bg-red-50"
-                                      onClick={() => handleDeleteItem('goods', good.id)}
-                                    >
-                                      Delete
-                                    </Button>
+                                    {canDeleteMasterItems && (
+                                      <Button 
+                                        variant="outline" 
+                                        size="sm" 
+                                        className="text-red-600 border-red-200 hover:bg-red-50"
+                                        onClick={() => handleDeleteItem('goods', good.id)}
+                                      >
+                                        Delete
+                                      </Button>
+                                    )}
                                   </>
                                 )}
                               </div>
@@ -5931,7 +5971,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                 <div className="flex gap-2">
                   {isAdmin && (activeTab === 'master' || activeTab === 'master_sheet') && (
                     <div className="flex items-center gap-2">
-                      {selectedTools.length > 0 && (
+                      {canDeleteMasterItems && selectedTools.length > 0 && (
                         <Button 
                           variant="danger" 
                           size="sm" 
@@ -5977,14 +6017,16 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                                   >
                                     <Edit className="w-3.5 h-3.5" /> Edit
                                   </Button>
-                                  <Button 
-                                    variant="outline" 
-                                    size="sm" 
-                                    onClick={() => handleDeleteItem('tools', highlightedRow)}
-                                    className="text-red-600 border-red-200 hover:bg-red-50"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" /> Delete
-                                  </Button>
+                                  {canDeleteMasterItems && (
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm" 
+                                      onClick={() => handleDeleteItem('tools', highlightedRow)}
+                                      className="text-red-600 border-red-200 hover:bg-red-50"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" /> Delete
+                                    </Button>
+                                  )}
                                 </>
                               )}
                             </div>
@@ -6196,14 +6238,16 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                                         Edit
                                       </Button>
                                     )}
-                                    <Button 
-                                      variant="outline" 
-                                      size="sm" 
-                                      className="text-red-600 border-red-200 hover:bg-red-50"
-                                      onClick={() => handleDeleteItem('tools', tool.id)}
-                                    >
-                                      Delete
-                                    </Button>
+                                    {canDeleteMasterItems && (
+                                      <Button 
+                                        variant="outline" 
+                                        size="sm" 
+                                        className="text-red-600 border-red-200 hover:bg-red-50"
+                                        onClick={() => handleDeleteItem('tools', tool.id)}
+                                      >
+                                        Delete
+                                      </Button>
+                                    )}
                                   </>
                                 )}
                               </div>
@@ -7460,7 +7504,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
           />
         )}
 
-        {activeTab === 'billing' && (
+        {activeTab === 'billing' && canSeeBilling && (
           <div className="w-full">
             <BillingManager 
               user={user} 
