@@ -2749,6 +2749,18 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
         let counts = { tiles: 0, goods: 0, tools: 0 };
         let totalProcessed = 0;
 
+        const getRowVal = (row: any, keys: string[]): string => {
+          for (const key of keys) {
+            if (row[key] !== undefined && row[key] !== null) {
+              const val = String(row[key]).trim();
+              if (val.toLowerCase() !== 'undefined' && val.toLowerCase() !== 'null') {
+                return val;
+              }
+            }
+          }
+          return '';
+        };
+
         // Process each sheet
         for (const sheetName of wb.SheetNames) {
           const ws = wb.Sheets[sheetName];
@@ -2788,16 +2800,21 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   totalPcs: diaBariPcs + bonorupaPcs + bananiPcs + dokhinkhanPcs,
                   diaBariSft: diaBariSft,
                   diaBariPcs: diaBariPcs,
-                  diaBariRemark: String(row['REMARK'] || row['Remark'] || ''),
+                  diaBariRemark: getRowVal(row, ['REMARK', 'Remark', 'remark']),
                   bonorupaSft: bonorupaSft,
                   bonorupaPcs: bonorupaPcs,
-                  bonorupaRemark: String(row['REMARK_1'] || row['REMARK'] || ''),
+                  bonorupaRemark: getRowVal(row, ['REMARK_1', 'Remark_1', 'remark_1', 'REMAEK']),
                   bananiSft: bananiSft,
                   bananiPcs: bananiPcs,
-                  bananiRemark: String(row['REMARK_2'] || row['REMARK'] || ''),
+                  bananiRemark: getRowVal(row, ['REMARK_2', 'Remark_2', 'remark_2']),
                   dokhinkhanSft: dokhinkhanSft,
                   dokhinkhanPcs: dokhinkhanPcs,
-                  dokhinkhanRemark: String(row['REMARK_3'] || row['REMARK_Dokhinkhan'] || row['REMARK_Bonorupa2'] || row['REMARK_Bonorupa 2'] || ''),
+                  dokhinkhanRemark: getRowVal(row, [
+                    'REMARK_3', 'Remark_3', 'remark_3', 
+                    'REMARK_Dokhinkhan', 'REMARK_Bonorupa2', 'REMARK_Bonorupa 2', 
+                    'Remark_Dokhinkhan', 'Remark_Bonorupa2', 'Remark_Bonorupa 2',
+                    'remark_dokhinkhan', 'remark_bonorupa2', 'remark_bonorupa 2'
+                  ]),
                   imageUrl: String(row['IMAGE'] || row['Image'] || row['image'] || '')
                 });
                 counts.tiles++;
@@ -2812,11 +2829,17 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   code: String(row['CODE'] || row['Code'] || row['code'] || ''),
                   description: String(row['DISCRIPTION'] || row['Description'] || row['description'] || ''),
                   dokhinkhan: Number(row['BONORUPA 2'] || row['Bonorupa 2'] || row['BONORUPA_2'] || row['Bonorupa_2'] || row['DOKHINKHAN'] || row['Dokhinkhan'] || 0),
-                  dokhinkhanRemark: String(row['REMARK'] || row['Remark'] || ''),
+                  dokhinkhanRemark: getRowVal(row, [
+                    'REMARK', 'Remark', 'remark',
+                    'REMARK_3', 'Remark_3', 'remark_3', 
+                    'REMARK_Dokhinkhan', 'REMARK_Bonorupa2', 'REMARK_Bonorupa 2', 
+                    'Remark_Dokhinkhan', 'Remark_Bonorupa2', 'Remark_Bonorupa 2',
+                    'remark_dokhinkhan', 'remark_bonorupa2', 'remark_bonorupa 2'
+                  ]),
                   bonorupa: Number(row['BONORUPA'] || row['Bonorupa'] || 0),
-                  bonorupaRemark: String(row['REMARK_1'] || row['REMARK'] || ''),
+                  bonorupaRemark: getRowVal(row, ['REMARK_1', 'Remark_1', 'remark_1', 'REMAEK']),
                   banani: Number(row['BANANI'] || row['Banani'] || 0),
-                  bananiRemark: String(row['REMAEK'] || row['REMARK_2'] || row['REMARK'] || ''),
+                  bananiRemark: getRowVal(row, ['REMARK_2', 'Remark_2', 'remark_2']),
                   imageUrl: String(row['IMAGE'] || row['Image'] || row['image'] || '')
                 });
                 counts.goods++;
