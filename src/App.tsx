@@ -2758,7 +2758,71 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
               }
             }
           }
+          // Fallback to case-insensitive and trimmed spaces
+          const rowKeys = Object.keys(row);
+          const cleanKey = (k: string) => k.toLowerCase().replace(/[\s_\-]/g, '');
+          const cleanSearchKeys = keys.map(cleanKey);
+          for (const cleanSearchKey of cleanSearchKeys) {
+            const matchedKey = rowKeys.find(rk => cleanKey(rk) === cleanSearchKey);
+            if (matchedKey) {
+              const val = String(row[matchedKey]).trim();
+              if (val.toLowerCase() !== 'undefined' && val.toLowerCase() !== 'null') {
+                return val;
+              }
+            }
+          }
           return '';
+        };
+
+        const parseRemarks = (row: any, locations: string[]): Record<string, string> => {
+          const rowKeys = Object.keys(row);
+          const remarkKeys = rowKeys.filter(k => {
+            const lk = k.toLowerCase();
+            return lk.includes('remark') || lk.includes('remaek') || lk.includes('rmk');
+          });
+
+          const result: Record<string, string> = {};
+          for (const loc of locations) {
+            result[loc] = '';
+          }
+
+          const unassignedKeys: string[] = [];
+          for (const rk of remarkKeys) {
+            const lrk = rk.toLowerCase().replace(/[\s_\-]/g, '');
+            let matched = false;
+            
+            // Sort locations by length descending to match longer words first
+            const locCheckOrder = locations.slice().sort((a, b) => b.length - a.length);
+            for (const l of locCheckOrder) {
+              const cleanL = l.toLowerCase().replace(/[\s_\-]/g, '');
+              if (lrk.includes(cleanL)) {
+                result[l] = String(row[rk] || '').trim();
+                matched = true;
+                break;
+              }
+            }
+            if (!matched) {
+              unassignedKeys.push(rk);
+            }
+          }
+
+          let unassignedIdx = 0;
+          for (const loc of locations) {
+            if (!result[loc] && unassignedIdx < unassignedKeys.length) {
+              const rk = unassignedKeys[unassignedIdx];
+              result[loc] = String(row[rk] || '').trim();
+              unassignedIdx++;
+            }
+          }
+
+          // Clean up "undefined" or "null" strings
+          for (const loc of locations) {
+            if (result[loc].toLowerCase() === 'undefined' || result[loc].toLowerCase() === 'null') {
+              result[loc] = '';
+            }
+          }
+
+          return result;
         };
 
         // Process each sheet
@@ -2792,6 +2856,8 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                 const bananiSft = calculateSft(sizeStr, bananiPcs);
                 const dokhinkhanSft = calculateSft(sizeStr, dokhinkhanPcs);
 
+                const remarks = parseRemarks(row, ['diaBari', 'bonorupa', 'banani', 'dokhinkhan']);
+
                 await addDoc(collection(db, 'tiles'), {
                   name: String(row['NAME'] || row['Name'] || row['name'] || ''),
                   size: sizeStr,
@@ -2800,21 +2866,16 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   totalPcs: diaBariPcs + bonorupaPcs + bananiPcs + dokhinkhanPcs,
                   diaBariSft: diaBariSft,
                   diaBariPcs: diaBariPcs,
-                  diaBariRemark: getRowVal(row, ['REMARK', 'Remark', 'remark']),
+                  diaBariRemark: remarks['diaBari'],
                   bonorupaSft: bonorupaSft,
                   bonorupaPcs: bonorupaPcs,
-                  bonorupaRemark: getRowVal(row, ['REMARK_1', 'Remark_1', 'remark_1', 'REMAEK']),
+                  bonorupaRemark: remarks['bonorupa'],
                   bananiSft: bananiSft,
                   bananiPcs: bananiPcs,
-                  bananiRemark: getRowVal(row, ['REMARK_2', 'Remark_2', 'remark_2']),
+                  bananiRemark: remarks['banani'],
                   dokhinkhanSft: dokhinkhanSft,
                   dokhinkhanPcs: dokhinkhanPcs,
-                  dokhinkhanRemark: getRowVal(row, [
-                    'REMARK_3', 'Remark_3', 'remark_3', 
-                    'REMARK_Dokhinkhan', 'REMARK_Bonorupa2', 'REMARK_Bonorupa 2', 
-                    'Remark_Dokhinkhan', 'Remark_Bonorupa2', 'Remark_Bonorupa 2',
-                    'remark_dokhinkhan', 'remark_bonorupa2', 'remark_bonorupa 2'
-                  ]),
+                  dokhinkhanRemark: remarks['dokhinkhan'],
                   imageUrl: String(row['IMAGE'] || row['Image'] || row['image'] || '')
                 });
                 counts.tiles++;
@@ -2824,23 +2885,44 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
           } else if (normalizedSheetName.includes('good')) {
             for (const row of data as any[]) {
               try {
+                const rowKeys = Object.keys(row);
+                const findValByKeys = (possibleKeys: string[]): any => {
+                  const cleanKeys = possibleKeys.map(k => k.toLowerCase().replace(/[\s_\-]/g, ''));
+                  const matchedKey = rowKeys.find(rk => cleanKeys.includes(rk.toLowerCase().replace(/[\s_\-]/g, '')));
+                  return matchedKey ? row[matchedKey] : undefined;
+                };
+
+                const brandVal = String(findValByKeys(['brand', 'BRAND']) || '').trim();
+                const codeVal = String(findValByKeys(['code', 'CODE']) || '').trim();
+                const descVal = String(findValByKeys(['description', 'DISCRIPTION', 'discription']) || '').trim();
+                const dokhinkhanVal = Number(findValByKeys(['bonorupa2', 'bonorupa 2', 'dokhinkhan', 'DOKHINKHAN']) || 0);
+                const bananiVal = Number(findValByKeys(['banani', 'BANANI']) || 0);
+
+                let dokhinkhanRemarkVal = String(findValByKeys(['remark1', 'remark_1', 'remaek1', 'remaek_1']) || '').trim();
+                let bananiRemarkVal = String(findValByKeys(['remark2', 'remark_2', 'remaek2', 'remaek_2']) || '').trim();
+
+                if (!dokhinkhanRemarkVal) {
+                  dokhinkhanRemarkVal = String(findValByKeys(['remark', 'REMARK']) || '').trim();
+                }
+
+                const cleanStr = (s: string) => {
+                  const lower = s.toLowerCase();
+                  return (lower === 'undefined' || lower === 'null') ? '' : s;
+                };
+
+                const imageUrlVal = cleanStr(String(findValByKeys(['image', 'IMAGE', 'imageUrl', 'image_url']) || '').trim());
+
                 await addDoc(collection(db, 'goods'), {
-                  brand: String(row['BRAND'] || row['Brand'] || row['brand'] || ''),
-                  code: String(row['CODE'] || row['Code'] || row['code'] || ''),
-                  description: String(row['DISCRIPTION'] || row['Description'] || row['description'] || ''),
-                  dokhinkhan: Number(row['BONORUPA 2'] || row['Bonorupa 2'] || row['BONORUPA_2'] || row['Bonorupa_2'] || row['DOKHINKHAN'] || row['Dokhinkhan'] || 0),
-                  dokhinkhanRemark: getRowVal(row, [
-                    'REMARK', 'Remark', 'remark',
-                    'REMARK_3', 'Remark_3', 'remark_3', 
-                    'REMARK_Dokhinkhan', 'REMARK_Bonorupa2', 'REMARK_Bonorupa 2', 
-                    'Remark_Dokhinkhan', 'Remark_Bonorupa2', 'Remark_Bonorupa 2',
-                    'remark_dokhinkhan', 'remark_bonorupa2', 'remark_bonorupa 2'
-                  ]),
-                  bonorupa: Number(row['BONORUPA'] || row['Bonorupa'] || 0),
-                  bonorupaRemark: getRowVal(row, ['REMARK_1', 'Remark_1', 'remark_1', 'REMAEK']),
-                  banani: Number(row['BANANI'] || row['Banani'] || 0),
-                  bananiRemark: getRowVal(row, ['REMARK_2', 'Remark_2', 'remark_2']),
-                  imageUrl: String(row['IMAGE'] || row['Image'] || row['image'] || '')
+                  brand: brandVal,
+                  code: codeVal,
+                  description: descVal,
+                  dokhinkhan: dokhinkhanVal,
+                  dokhinkhanRemark: cleanStr(dokhinkhanRemarkVal),
+                  bonorupa: 0,
+                  bonorupaRemark: '',
+                  banani: bananiVal,
+                  bananiRemark: cleanStr(bananiRemarkVal),
+                  imageUrl: imageUrlVal
                 });
                 counts.goods++;
                 totalProcessed++;
@@ -5500,12 +5582,10 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                       <TableHeader align="center" className={cn(activeTab === 'search' && "bg-slate-200/50")}>Code</TableHeader>
                       <TableHeader className={cn(activeTab === 'search' && "bg-slate-200/50")}>Description</TableHeader>
                       <TableHeader align="center" className={cn("!bg-blue-100/90 text-blue-950 font-semibold !border-b-blue-400", activeTab === 'search' && "bg-blue-200/50")}>Total (PCS)</TableHeader>
-                      <TableHeader align="center" className={cn(activeTab === 'search' && "bg-slate-200/50")}>Bonorupa</TableHeader>
+                      <TableHeader align="center" className={cn(activeTab === 'search' && "bg-slate-200/50")}>Bonorupa 2</TableHeader>
                       <TableHeader className={cn(activeTab === 'search' && "bg-slate-200/50")}>Remark_1</TableHeader>
                       <TableHeader align="center" className={cn(activeTab === 'search' && "bg-slate-200/50")}>Banani</TableHeader>
                       <TableHeader className={cn(activeTab === 'search' && "bg-slate-200/50")}>Remark_2</TableHeader>
-                      <TableHeader align="center" className={cn(activeTab === 'search' && "bg-slate-200/50")}>Bonorupa 2</TableHeader>
-                      <TableHeader className={cn(activeTab === 'search' && "bg-slate-200/50")}>Remark</TableHeader>
 
                       {isAdmin && (activeTab === 'master' || activeTab === 'master_sheet') && (highlightedRow || editingId !== null) && activeTab !== 'master' && <TableHeader className={cn(activeTab === 'search' && "bg-slate-200/50")}>Action</TableHeader>}
                     </tr>
@@ -5633,60 +5713,45 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                           <TableCell align="center" className={cn("font-semibold border-slate-300", isOutOfStock ? "text-red-950 font-bold" : "!bg-blue-50/50 " + getCellColor(totalPcs))}>
                             {isOutOfStock ? 0 : (totalPcs || 0)}
                           </TableCell>
-                          <TableCell align="center" className={cn("border-slate-300", isOutOfStock ? "text-red-950 font-semibold" : getCellColor(good.bonorupa))}>
+                          <TableCell align="center" className={cn("border-slate-300 font-normal", isOutOfStock ? "text-red-950 font-semibold" : getCellColor(good.dokhinkhan))}>
                             {isEditing ? (
-                              <input 
-                                type="number"
-                                className="w-full h-full min-h-[44px] px-4 py-3 bg-blue-50/50 border-2 border-transparent focus:border-blue-500 outline-none m-0 text-center text-inherit text-sm resize-none rounded-none editing-input-active" 
-                                value={editData.bonorupa || 0} 
-                                onChange={e => setEditData({ ...editData, bonorupa: Number(e.target.value) || 0 })}
-                              />
-                            ) : Math.round(good.bonorupa || 0)}
-                          </TableCell>
-                          <TableCell className={cn("text-xs border-slate-300", isOutOfStock ? "text-red-950/80 font-medium" : "text-gray-500 italic")}>
-                            {isEditing ? (
-                              <textarea 
-                                className="w-full h-full min-h-[44px] px-4 py-3 bg-blue-50/50 border-2 border-transparent focus:border-blue-500 outline-none m-0 text-inherit text-sm resize-none rounded-none editing-input-active" 
-                                value={editData.bonorupaRemark} 
-                                onChange={e => setEditData({ ...editData, bonorupaRemark: e.target.value })}
-                                onInput={e => { e.currentTarget.style.height = 'auto'; e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px'; }}
-                              />
-                            ) : good.bonorupaRemark}
-                          </TableCell>
-                          <TableCell align="center" className={cn("border-slate-300 font-normal", isOutOfStock ? "text-red-950 font-semibold" : getCellColor(good.banani))}>{isEditing ? (
-                              <input 
-                                type="number"
-                                className="w-full h-full min-h-[44px] px-4 py-3 bg-blue-50/50 border-2 border-transparent focus:border-blue-500 outline-none m-0 text-center text-inherit text-sm resize-none rounded-none editing-input-active" 
-                                value={editData.banani || 0} 
-                                onChange={e => setEditData({ ...editData, banani: Number(e.target.value) || 0 })}
-                              />
-                            ) : Math.round(good.banani || 0)}</TableCell>
-                          <TableCell className={cn("text-xs border-slate-300", isOutOfStock ? "text-red-950/80 font-medium" : "text-gray-800 font-normal italic")}>
-                            {isEditing ? (
-                              <textarea 
-                                className="w-full h-full min-h-[44px] px-4 py-3 bg-blue-50/50 border-2 border-transparent focus:border-blue-500 outline-none m-0 text-inherit text-sm resize-none rounded-none editing-input-active" 
-                                value={editData.bananiRemark} 
-                                onChange={e => setEditData({ ...editData, bananiRemark: e.target.value })}
-                                onInput={e => { e.currentTarget.style.height = 'auto'; e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px'; }}
-                              />
-                            ) : good.bananiRemark}
-                          </TableCell>
-                          <TableCell align="center" className={cn("border-slate-300 font-normal", isOutOfStock ? "text-red-950 font-semibold" : getCellColor(good.dokhinkhan))}>{isEditing ? (
                               <input 
                                 type="number"
                                 className="w-full h-full min-h-[44px] px-4 py-3 bg-blue-50/50 border-2 border-transparent focus:border-blue-500 outline-none m-0 text-center text-inherit text-sm resize-none rounded-none editing-input-active" 
                                 value={editData.dokhinkhan || 0} 
                                 onChange={e => setEditData({ ...editData, dokhinkhan: Number(e.target.value) || 0 })}
                               />
-                            ) : Math.round(good.dokhinkhan || 0)}</TableCell>
-                          <TableCell className={cn("text-xs border-slate-300", isOutOfStock ? "text-red-950/80 font-medium" : "text-gray-800 font-normal italic")}>
+                            ) : Math.round(good.dokhinkhan || 0)}
+                          </TableCell>
+                          <TableCell className={cn("text-xs border-slate-300", isOutOfStock ? "text-red-950/80 font-medium" : "text-gray-500 italic")}>
                             {isEditing ? (
-                              <input 
+                              <textarea 
                                 className="w-full h-full min-h-[44px] px-4 py-3 bg-blue-50/50 border-2 border-transparent focus:border-blue-500 outline-none m-0 text-inherit text-sm resize-none rounded-none editing-input-active" 
-                                value={editData.dokhinkhanRemark} 
+                                value={editData.dokhinkhanRemark || ''} 
                                 onChange={e => setEditData({ ...editData, dokhinkhanRemark: e.target.value })}
+                                onInput={e => { e.currentTarget.style.height = 'auto'; e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px'; }}
                               />
                             ) : good.dokhinkhanRemark}
+                          </TableCell>
+                          <TableCell align="center" className={cn("border-slate-300 font-normal", isOutOfStock ? "text-red-950 font-semibold" : getCellColor(good.banani))}>
+                            {isEditing ? (
+                              <input 
+                                type="number"
+                                className="w-full h-full min-h-[44px] px-4 py-3 bg-blue-50/50 border-2 border-transparent focus:border-blue-500 outline-none m-0 text-center text-inherit text-sm resize-none rounded-none editing-input-active" 
+                                value={editData.banani || 0} 
+                                onChange={e => setEditData({ ...editData, banani: Number(e.target.value) || 0 })}
+                              />
+                            ) : Math.round(good.banani || 0)}
+                          </TableCell>
+                          <TableCell className={cn("text-xs border-slate-300", isOutOfStock ? "text-red-950/80 font-medium" : "text-gray-800 font-normal italic")}>
+                            {isEditing ? (
+                              <textarea 
+                                className="w-full h-full min-h-[44px] px-4 py-3 bg-blue-50/50 border-2 border-transparent focus:border-blue-500 outline-none m-0 text-inherit text-sm resize-none rounded-none editing-input-active" 
+                                value={editData.bananiRemark || ''} 
+                                onChange={e => setEditData({ ...editData, bananiRemark: e.target.value })}
+                                onInput={e => { e.currentTarget.style.height = 'auto'; e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px'; }}
+                              />
+                            ) : good.bananiRemark}
                           </TableCell>
                           {isAdmin && (activeTab === 'master' || activeTab === 'master_sheet') && (highlightedRow === good.id || isEditing) && activeTab !== 'master' && (
                             <TableCell>
@@ -7672,12 +7737,10 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                       <Input label="Brand" name="brand" defaultValue={editingItem?.item.brand} placeholder="Brand name" list="uniqueBrands" options={uniqueBrands} />
                       <Input label="Code" name="code" required defaultValue={editingItem?.item.code} placeholder="XXXX-XXXX" />
                       <Input label="Description" name="description" defaultValue={editingItem?.item.description} className="sm:col-span-2" />
-                      <Input label="Bonorupa Qty" name="bonorupa" type="number" defaultValue={editingItem?.item.bonorupa} />
-                      <Input label="Bonorupa Remark" name="bonorupaRemark" defaultValue={editingItem?.item.bonorupaRemark} />
-                      <Input label="Banani Qty_1" name="banani" type="number" defaultValue={editingItem?.item.banani} />
-                      <Input label="Banani Remark_1" name="bananiRemark" defaultValue={editingItem?.item.bananiRemark} />
                       <Input label="Bonorupa 2 Qty" name="dokhinkhan" type="number" defaultValue={editingItem?.item.dokhinkhan} />
                       <Input label="Bonorupa 2 Remark" name="dokhinkhanRemark" defaultValue={editingItem?.item.dokhinkhanRemark} />
+                      <Input label="Banani Qty" name="banani" type="number" defaultValue={editingItem?.item.banani} />
+                      <Input label="Banani Remark" name="bananiRemark" defaultValue={editingItem?.item.bananiRemark} />
                       <div className="flex flex-col gap-1.5 sm:col-span-2">
                         <label className="text-sm font-medium text-gray-700">Image File</label>
                         <input type="file" name="imageFile" accept="image/*" className="text-sm" />
