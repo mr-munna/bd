@@ -7726,11 +7726,21 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     }
                     delete data.imageFile;
 
-                    // Convert numeric fields
+                    // Convert numeric fields (only specifically designated numeric keys)
+                    const numericKeys = [
+                      'totalSft', 'totalPcs', 'diaBariSft', 'diaBariPcs',
+                      'bonorupaSft', 'bonorupaPcs', 'bananiSft', 'bananiPcs',
+                      'dokhinkhanSft', 'dokhinkhanPcs', 'dokhinkhan', 'bonorupa',
+                      'banani', 'qty', 'qtySft', 'qtyPcs', 'quantity', 'unitPrice',
+                      'total', 'subTotal', 'discount', 'discountPercent', 'totalAmount',
+                      'paidAmount', 'dueAmount'
+                    ];
                     Object.keys(data).forEach(key => {
                       const val = data[key];
-                      if (typeof val === 'string' && val !== '' && !isNaN(Number(val))) {
-                        data[key] = Number(val);
+                      if (numericKeys.includes(key)) {
+                        if (typeof val === 'string' && val !== '' && !isNaN(Number(val))) {
+                          data[key] = Number(val);
+                        }
                       }
                     });
 
