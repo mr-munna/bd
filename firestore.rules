@@ -189,7 +189,7 @@ service cloud.firestore {
       allow read: if isPendingOrApproved();
       allow create: if isAdmin() && isValidBookedItem(incoming());
       allow update: if isAdmin() && isValidBookedItem(incoming());
-      allow delete: if isSuperAdmin();
+      allow delete: if isAdmin();
     }
 
     match /sales/{saleId} {
