@@ -73,6 +73,9 @@ export interface DeliveryApprovalItem {
   brand?: string;
   quantity: number;
   unit: string;
+  productType?: 'tile' | 'good' | 'tool';
+  productId?: string;
+  deductions?: { locationKey: string; quantity: number }[];
 }
 
 export interface DeliveryApproval {

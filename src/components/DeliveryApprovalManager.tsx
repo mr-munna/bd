@@ -11,7 +11,8 @@ import {
   onSnapshot, 
   query, 
   orderBy,
-  deleteDoc
+  deleteDoc,
+  getDoc
 } from 'firebase/firestore';
 import { 
   FileText, 
@@ -285,7 +286,9 @@ export const DeliveryApprovalManager: React.FC<DeliveryApprovalManagerProps> = (
       size: size,
       brand: brand,
       quantity: Number(quantity),
-      unit: unit
+      unit: unit,
+      productType: selectedProduct ? selectedProduct.type : undefined,
+      productId: selectedProduct ? selectedProduct.id : undefined
     };
 
     setItemsList([...itemsList, newItem]);
@@ -321,7 +324,9 @@ export const DeliveryApprovalManager: React.FC<DeliveryApprovalManagerProps> = (
           size: size,
           brand: brand,
           quantity: Number(quantity),
-          unit: unit
+          unit: unit,
+          productType: selectedProduct ? selectedProduct.type : undefined,
+          productId: selectedProduct ? selectedProduct.id : undefined
         });
       } else {
         toast.error("Please add at least one product to the challan");
@@ -387,6 +392,395 @@ export const DeliveryApprovalManager: React.FC<DeliveryApprovalManagerProps> = (
     }
   };
 
+  // Deduct stock when delivery challan is approved
+  const deductStock = async (item: DeliveryApproval) => {
+    const isMultiItem = item.items && item.items.length > 0;
+    const itemsToDeduct = isMultiItem
+      ? [...item.items!]
+      : [{
+          productName: item.productName || '',
+          productCode: item.productCode || '',
+          size: item.size || '',
+          brand: item.brand || '',
+          quantity: item.quantity || 0,
+          unit: item.unit || 'pcs',
+          productType: undefined as any,
+          productId: undefined as any,
+          deductions: [] as any[]
+        }];
+
+    const updatedItemsList: any[] = [];
+    let singleItemDeductions: any[] = [];
+
+    for (let idx = 0; idx < itemsToDeduct.length; idx++) {
+      const challanItem = { ...itemsToDeduct[idx], deductions: [] as any[] };
+      let matchedType: 'tile' | 'good' | 'tool' | null = challanItem.productType || null;
+      let matchedId: string | null = challanItem.productId || null;
+
+      // If type/id are missing, try to match by name, code, etc. (for custom/legacy items)
+      if (!matchedType || !matchedId) {
+        // Try to find in tiles (match by name or code)
+        const foundTile = tiles.find(t => 
+          !t.deleted && (
+            t.name.toLowerCase().trim() === challanItem.productName.toLowerCase().trim() ||
+            (challanItem.productCode && t.brand.toLowerCase().trim() === challanItem.productCode.toLowerCase().trim())
+          )
+        );
+        if (foundTile) {
+          matchedType = 'tile';
+          matchedId = foundTile.id;
+        } else {
+          // Try to find in goods (match by code or description)
+          const foundGood = goods.find(g => 
+            !g.deleted && (
+              g.code.toLowerCase().trim() === challanItem.productCode.toLowerCase().trim() ||
+              g.description.toLowerCase().trim() === challanItem.productName.toLowerCase().trim()
+            )
+          );
+          if (foundGood) {
+            matchedType = 'good';
+            matchedId = foundGood.id;
+          } else {
+            // Try to find in tools (match by details)
+            const foundTool = tools.find(t => 
+              !t.deleted && t.details.toLowerCase().trim() === challanItem.productName.toLowerCase().trim()
+            );
+            if (foundTool) {
+              matchedType = 'tool';
+              matchedId = foundTool.id;
+            }
+          }
+        }
+      }
+
+      if (!matchedType || !matchedId) {
+        console.warn(`No inventory match found for item: ${challanItem.productName} (Code: ${challanItem.productCode})`);
+        updatedItemsList.push(challanItem);
+        continue;
+      }
+
+      const collectionName = matchedType === 'tile' ? 'tiles' : (matchedType === 'good' ? 'goods' : 'tools');
+      const docRef = doc(db, collectionName, matchedId);
+
+      try {
+        const snap = await getDoc(docRef);
+        if (!snap.exists()) {
+          console.warn(`Document ${matchedId} not found in collection ${collectionName}`);
+          updatedItemsList.push(challanItem);
+          continue;
+        }
+
+        const dbItem = snap.data();
+        const itemDeductions: { locationKey: string; quantity: number }[] = [];
+
+        if (matchedType === 'tile') {
+          const parts = (dbItem.size || '').toLowerCase().split('x');
+          let sftPerPcs = 1;
+          if (parts.length === 2) {
+            const w = parseFloat(parts[0]);
+            const h = parseFloat(parts[1]);
+            if (!isNaN(w) && !isNaN(h)) {
+              sftPerPcs = (w / 30) * (h / 30);
+            }
+          }
+
+          const unit = (challanItem.unit || 'pcs').toLowerCase();
+          let pcsToDeduct = 0;
+          let sftToDeduct = 0;
+
+          if (unit === 'sft') {
+            sftToDeduct = challanItem.quantity;
+            pcsToDeduct = Math.round(challanItem.quantity / sftPerPcs);
+          } else {
+            pcsToDeduct = challanItem.quantity;
+            sftToDeduct = Number((challanItem.quantity * sftPerPcs).toFixed(2));
+          }
+
+          // Subtract from locations in order: DiaBari, Bonorupa, Banani, Dokhinkhan
+          const locations = [
+            { pcsKey: 'diaBariPcs', sftKey: 'diaBariSft' },
+            { pcsKey: 'bonorupaPcs', sftKey: 'bonorupaSft' },
+            { pcsKey: 'bananiPcs', sftKey: 'bananiSft' },
+            { pcsKey: 'dokhinkhanPcs', sftKey: 'dokhinkhanSft' }
+          ];
+
+          let remainingPcs = pcsToDeduct;
+          const updatedFields: any = {};
+
+          for (const loc of locations) {
+            if (remainingPcs <= 0) break;
+            const currentPcs = Number(dbItem[loc.pcsKey] || 0);
+            if (currentPcs > 0) {
+              const deduct = Math.min(currentPcs, remainingPcs);
+              const newPcs = currentPcs - deduct;
+              updatedFields[loc.pcsKey] = newPcs;
+              updatedFields[loc.sftKey] = Number((newPcs * sftPerPcs).toFixed(2));
+              remainingPcs -= deduct;
+              itemDeductions.push({ locationKey: loc.pcsKey, quantity: deduct });
+            }
+          }
+
+          // If still remaining, deduct from the first location (DiaBari)
+          if (remainingPcs > 0) {
+            const firstLoc = locations[0];
+            const currentPcs = Number(dbItem[firstLoc.pcsKey] || 0);
+            const newPcs = Math.max(0, currentPcs - remainingPcs);
+            updatedFields[firstLoc.pcsKey] = newPcs;
+            updatedFields[firstLoc.sftKey] = Number((newPcs * sftPerPcs).toFixed(2));
+            itemDeductions.push({ locationKey: firstLoc.pcsKey, quantity: remainingPcs });
+          }
+
+          // Recalculate totals
+          const diaBariPcs = updatedFields.diaBariPcs !== undefined ? updatedFields.diaBariPcs : Number(dbItem.diaBariPcs || 0);
+          const bonorupaPcs = updatedFields.bonorupaPcs !== undefined ? updatedFields.bonorupaPcs : Number(dbItem.bonorupaPcs || 0);
+          const bananiPcs = updatedFields.bananiPcs !== undefined ? updatedFields.bananiPcs : Number(dbItem.bananiPcs || 0);
+          const dokhinkhanPcs = updatedFields.dokhinkhanPcs !== undefined ? updatedFields.dokhinkhanPcs : Number(dbItem.dokhinkhanPcs || 0);
+
+          const diaBariSft = updatedFields.diaBariSft !== undefined ? updatedFields.diaBariSft : Number(dbItem.diaBariSft || 0);
+          const bonorupaSft = updatedFields.bonorupaSft !== undefined ? updatedFields.bonorupaSft : Number(dbItem.bonorupaSft || 0);
+          const bananiSft = updatedFields.bananiSft !== undefined ? updatedFields.bananiSft : Number(dbItem.bananiSft || 0);
+          const dokhinkhanSft = updatedFields.dokhinkhanSft !== undefined ? updatedFields.dokhinkhanSft : Number(dbItem.dokhinkhanSft || 0);
+
+          updatedFields.totalPcs = diaBariPcs + bonorupaPcs + bananiPcs + dokhinkhanPcs;
+          updatedFields.totalSft = Number((diaBariSft + bonorupaSft + bananiSft + dokhinkhanSft).toFixed(2));
+
+          await updateDoc(docRef, updatedFields);
+          toast.success(`Deducted ${pcsToDeduct} PCS / ${sftToDeduct} SFT of tile "${challanItem.productName}" from stock.`);
+        } else if (matchedType === 'good') {
+          const pcsToDeduct = challanItem.quantity;
+          // Locations: banani, bonorupa, dokhinkhan
+          const locations = ['banani', 'bonorupa', 'dokhinkhan'];
+          let remainingPcs = pcsToDeduct;
+          const updatedFields: any = {};
+
+          for (const loc of locations) {
+            if (remainingPcs <= 0) break;
+            const currentPcs = Number(dbItem[loc] || 0);
+            if (currentPcs > 0) {
+              const deduct = Math.min(currentPcs, remainingPcs);
+              updatedFields[loc] = currentPcs - deduct;
+              remainingPcs -= deduct;
+              itemDeductions.push({ locationKey: loc, quantity: deduct });
+            }
+          }
+
+          if (remainingPcs > 0) {
+            const firstLoc = locations[0];
+            const currentPcs = Number(dbItem[firstLoc] || 0);
+            updatedFields[firstLoc] = Math.max(0, currentPcs - remainingPcs);
+            itemDeductions.push({ locationKey: firstLoc, quantity: remainingPcs });
+          }
+
+          await updateDoc(docRef, updatedFields);
+          toast.success(`Deducted ${pcsToDeduct} PCS of good "${challanItem.productName}" from stock.`);
+        } else if (matchedType === 'tool') {
+          const currentQty = Number(dbItem.qty || 0);
+          const deductQty = challanItem.quantity;
+          const newQty = Math.max(0, currentQty - deductQty);
+          await updateDoc(docRef, {
+            qty: newQty
+          });
+          itemDeductions.push({ locationKey: 'qty', quantity: deductQty });
+          toast.success(`Deducted ${deductQty} PCS of tool "${challanItem.productName}" from stock.`);
+        }
+
+        challanItem.deductions = itemDeductions;
+        if (!isMultiItem) {
+          singleItemDeductions = itemDeductions;
+        }
+      } catch (err) {
+        console.error(`Error deducting stock for ${challanItem.productName}:`, err);
+        toast.error(`Error deducting stock for ${challanItem.productName}`);
+      }
+      updatedItemsList.push(challanItem);
+    }
+
+    // Save deduction records back to delivery challan in Firestore
+    try {
+      const deliveryDocRef = doc(db, 'delivery_approvals', item.id);
+      if (isMultiItem) {
+        await updateDoc(deliveryDocRef, {
+          items: updatedItemsList
+        });
+      } else {
+        await updateDoc(deliveryDocRef, {
+          deductions: singleItemDeductions
+        });
+      }
+    } catch (saveErr) {
+      console.error("Error saving deduction records to delivery challan:", saveErr);
+    }
+  };
+
+  // Add stock back when delivery challan is unapproved / rejected / deleted
+  const addStockBack = async (item: DeliveryApproval) => {
+    const isMultiItem = item.items && item.items.length > 0;
+    const itemsToAdd = isMultiItem 
+      ? item.items! 
+      : [{
+          productName: item.productName || '',
+          productCode: item.productCode || '',
+          size: item.size || '',
+          brand: item.brand || '',
+          quantity: item.quantity || 0,
+          unit: item.unit || 'pcs',
+          productType: undefined as any,
+          productId: undefined as any,
+          deductions: (item as any).deductions || []
+        }];
+
+    for (const challanItem of itemsToAdd) {
+      let matchedType: 'tile' | 'good' | 'tool' | null = challanItem.productType || null;
+      let matchedId: string | null = challanItem.productId || null;
+
+      // If type/id are missing, try to match by name, code, etc. (for custom/legacy items)
+      if (!matchedType || !matchedId) {
+        // Try to find in tiles (match by name or code)
+        const foundTile = tiles.find(t => 
+          !t.deleted && (
+            t.name.toLowerCase().trim() === challanItem.productName.toLowerCase().trim() ||
+            (challanItem.productCode && t.brand.toLowerCase().trim() === challanItem.productCode.toLowerCase().trim())
+          )
+        );
+        if (foundTile) {
+          matchedType = 'tile';
+          matchedId = foundTile.id;
+        } else {
+          // Try to find in goods (match by code or description)
+          const foundGood = goods.find(g => 
+            !g.deleted && (
+              g.code.toLowerCase().trim() === challanItem.productCode.toLowerCase().trim() ||
+              g.description.toLowerCase().trim() === challanItem.productName.toLowerCase().trim()
+            )
+          );
+          if (foundGood) {
+            matchedType = 'good';
+            matchedId = foundGood.id;
+          } else {
+            // Try to find in tools (match by details)
+            const foundTool = tools.find(t => 
+              !t.deleted && t.details.toLowerCase().trim() === challanItem.productName.toLowerCase().trim()
+            );
+            if (foundTool) {
+              matchedType = 'tool';
+              matchedId = foundTool.id;
+            }
+          }
+        }
+      }
+
+      if (!matchedType || !matchedId) {
+        console.warn(`No inventory match found for item to restore stock: ${challanItem.productName}`);
+        continue;
+      }
+
+      const collectionName = matchedType === 'tile' ? 'tiles' : (matchedType === 'good' ? 'goods' : 'tools');
+      const docRef = doc(db, collectionName, matchedId);
+
+      try {
+        const snap = await getDoc(docRef);
+        if (!snap.exists()) {
+          console.warn(`Document ${matchedId} not found in collection ${collectionName}`);
+          continue;
+        }
+
+        const dbItem = snap.data();
+        const hasSavedDeductions = challanItem.deductions && challanItem.deductions.length > 0;
+
+        if (matchedType === 'tile') {
+          const parts = (dbItem.size || '').toLowerCase().split('x');
+          let sftPerPcs = 1;
+          if (parts.length === 2) {
+            const w = parseFloat(parts[0]);
+            const h = parseFloat(parts[1]);
+            if (!isNaN(w) && !isNaN(h)) {
+              sftPerPcs = (w / 30) * (h / 30);
+            }
+          }
+
+          const updatedFields: any = {};
+
+          if (hasSavedDeductions) {
+            // Restore precisely from stored deductions list
+            challanItem.deductions.forEach((d: any) => {
+              const currentVal = Number(dbItem[d.locationKey] || updatedFields[d.locationKey] || 0);
+              updatedFields[d.locationKey] = currentVal + Number(d.quantity);
+              // Also update matching SFT key if it's a PCS key
+              const sftKey = d.locationKey.replace('Pcs', 'Sft');
+              if (sftKey !== d.locationKey) {
+                updatedFields[sftKey] = Number((updatedFields[d.locationKey] * sftPerPcs).toFixed(2));
+              }
+            });
+          } else {
+            // Fallback (for older approvals or if deductions weren't recorded)
+            const unit = (challanItem.unit || 'pcs').toLowerCase();
+            let pcsToAdd = 0;
+            if (unit === 'sft') {
+              pcsToAdd = Math.round(challanItem.quantity / sftPerPcs);
+            } else {
+              pcsToAdd = challanItem.quantity;
+            }
+            const currentPcs = Number(dbItem.diaBariPcs || 0);
+            const newPcs = currentPcs + pcsToAdd;
+            updatedFields.diaBariPcs = newPcs;
+            updatedFields.diaBariSft = Number((newPcs * sftPerPcs).toFixed(2));
+          }
+
+          // Recalculate totals based on both dbItem and updatedFields
+          const diaBariPcsVal = updatedFields.diaBariPcs !== undefined ? updatedFields.diaBariPcs : Number(dbItem.diaBariPcs || 0);
+          const bonorupaPcsVal = updatedFields.bonorupaPcs !== undefined ? updatedFields.bonorupaPcs : Number(dbItem.bonorupaPcs || 0);
+          const bananiPcsVal = updatedFields.bananiPcs !== undefined ? updatedFields.bananiPcs : Number(dbItem.bananiPcs || 0);
+          const dokhinkhanPcsVal = updatedFields.dokhinkhanPcs !== undefined ? updatedFields.dokhinkhanPcs : Number(dbItem.dokhinkhanPcs || 0);
+
+          const diaBariSftVal = updatedFields.diaBariSft !== undefined ? updatedFields.diaBariSft : Number(dbItem.diaBariSft || 0);
+          const bonorupaSftVal = updatedFields.bonorupaSft !== undefined ? updatedFields.bonorupaSft : Number(dbItem.bonorupaSft || 0);
+          const bananiSftVal = updatedFields.bananiSft !== undefined ? updatedFields.bananiSft : Number(dbItem.bananiSft || 0);
+          const dokhinkhanSftVal = updatedFields.dokhinkhanSft !== undefined ? updatedFields.dokhinkhanSft : Number(dbItem.dokhinkhanSft || 0);
+
+          updatedFields.totalPcs = diaBariPcsVal + bonorupaPcsVal + bananiPcsVal + dokhinkhanPcsVal;
+          updatedFields.totalSft = Number((diaBariSftVal + bonorupaSftVal + bananiSftVal + dokhinkhanSftVal).toFixed(2));
+
+          await updateDoc(docRef, updatedFields);
+          toast.success(`Restored tile "${challanItem.productName}" stock to original warehouses.`);
+        } else if (matchedType === 'good') {
+          const updatedFields: any = {};
+
+          if (hasSavedDeductions) {
+            challanItem.deductions.forEach((d: any) => {
+              const currentVal = Number(dbItem[d.locationKey] || updatedFields[d.locationKey] || 0);
+              updatedFields[d.locationKey] = currentVal + Number(d.quantity);
+            });
+          } else {
+            // Fallback (for older approvals or if deductions weren't recorded)
+            const pcsToAdd = challanItem.quantity;
+            const currentPcs = Number(dbItem.banani || 0);
+            updatedFields.banani = currentPcs + pcsToAdd;
+          }
+
+          await updateDoc(docRef, updatedFields);
+          toast.success(`Restored good "${challanItem.productName}" stock to original warehouses.`);
+        } else if (matchedType === 'tool') {
+          const currentQty = Number(dbItem.qty || 0);
+          let addQty = challanItem.quantity;
+          if (hasSavedDeductions) {
+            const qtyDeduction = challanItem.deductions.find((d: any) => d.locationKey === 'qty');
+            if (qtyDeduction) {
+              addQty = Number(qtyDeduction.quantity);
+            }
+          }
+          const newQty = currentQty + addQty;
+          await updateDoc(docRef, {
+            qty: newQty
+          });
+          toast.success(`Restored tool "${challanItem.productName}" stock.`);
+        }
+      } catch (err) {
+        console.error(`Error restoring stock for ${challanItem.productName}:`, err);
+        toast.error(`Error restoring stock for ${challanItem.productName}`);
+      }
+    }
+  };
+
   // Approve request
   const handleApprove = async (approvalId: string, role: 'supreme' | 'super') => {
     try {
@@ -414,8 +808,14 @@ export const DeliveryApprovalManager: React.FC<DeliveryApprovalManagerProps> = (
         updates.status = 'pending';
       }
 
+      const previousStatus = item.status;
+
       await updateDoc(doc(db, 'delivery_approvals', approvalId), updates);
       toast.success(`Approved as ${role === 'supreme' ? 'Supreme' : 'Super'} Admin`);
+
+      if (previousStatus !== 'approved' && updates.status === 'approved') {
+        await deductStock(item);
+      }
     } catch (error: any) {
       toast.error(`Approval failed: ${error.message}`);
       handleFirestoreError(error, OperationType.UPDATE, `delivery_approvals/${approvalId}`);
@@ -425,6 +825,9 @@ export const DeliveryApprovalManager: React.FC<DeliveryApprovalManagerProps> = (
   // Reject request
   const handleReject = async (approvalId: string, role: 'supreme' | 'super') => {
     try {
+      const item = approvals.find(a => a.id === approvalId);
+      if (!item) return;
+
       const updates: Partial<DeliveryApproval> = {
         status: 'rejected'
       };
@@ -438,8 +841,14 @@ export const DeliveryApprovalManager: React.FC<DeliveryApprovalManagerProps> = (
         updates.superApprovedBy = `${approverName} (Rejected)`;
       }
 
+      const previousStatus = item.status;
+
       await updateDoc(doc(db, 'delivery_approvals', approvalId), updates);
       toast.error("Delivery request rejected");
+
+      if (previousStatus === 'approved') {
+        await addStockBack(item);
+      }
     } catch (error: any) {
       toast.error(`Rejection failed: ${error.message}`);
       handleFirestoreError(error, OperationType.UPDATE, `delivery_approvals/${approvalId}`);
@@ -454,8 +863,12 @@ export const DeliveryApprovalManager: React.FC<DeliveryApprovalManagerProps> = (
     }
     if (!window.confirm("Are you sure you want to delete this request permanently?")) return;
     try {
+      const item = approvals.find(a => a.id === approvalId);
       await deleteDoc(doc(db, 'delivery_approvals', approvalId));
       toast.success("Request deleted successfully");
+      if (item && item.status === 'approved') {
+        await addStockBack(item);
+      }
     } catch (error: any) {
       toast.error(`Deletion failed: ${error.message}`);
       handleFirestoreError(error, OperationType.DELETE, `delivery_approvals/${approvalId}`);

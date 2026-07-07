@@ -3401,35 +3401,66 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
   }, [rawDisplayTools]);
 
   const displayTiles = useMemo(() => {
-    if (!showOutOfStockOnly) return rawDisplayTiles;
-    return rawDisplayTiles.filter(tile => {
-      const currentBookings = bookedItems.filter(b => b.name === tile.name);
-      const bookedSft = currentBookings.reduce((sum, b) => sum + (b.qtySft || 0), 0);
-      const bookedPcs = currentBookings.reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
-      const stockSft = Math.round((tile.totalSft - bookedSft) * 100) / 100;
-      const stockPcs = Math.round(tile.totalPcs - bookedPcs);
-      return stockSft <= 0 || stockPcs <= 0;
-    });
-  }, [rawDisplayTiles, showOutOfStockOnly, bookedItems]);
+    if (showOutOfStockOnly) {
+      return rawDisplayTiles.filter(tile => {
+        const currentBookings = bookedItems.filter(b => b.name === tile.name);
+        const bookedSft = currentBookings.reduce((sum, b) => sum + (b.qtySft || 0), 0);
+        const bookedPcs = currentBookings.reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
+        const stockSft = Math.round((tile.totalSft - bookedSft) * 100) / 100;
+        const stockPcs = Math.round(tile.totalPcs - bookedPcs);
+        return stockSft <= 0 || stockPcs <= 0;
+      });
+    }
+    if (activeTab === 'stock') {
+      return rawDisplayTiles.filter(tile => {
+        const currentBookings = bookedItems.filter(b => b.name === tile.name);
+        const bookedSft = currentBookings.reduce((sum, b) => sum + (b.qtySft || 0), 0);
+        const bookedPcs = currentBookings.reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
+        const stockSft = Math.round((tile.totalSft - bookedSft) * 100) / 100;
+        const stockPcs = Math.round(tile.totalPcs - bookedPcs);
+        return stockSft > 0 || stockPcs > 0;
+      });
+    }
+    return rawDisplayTiles;
+  }, [rawDisplayTiles, showOutOfStockOnly, bookedItems, activeTab]);
 
   const displayGoods = useMemo(() => {
-    if (!showOutOfStockOnly) return rawDisplayGoods;
-    return rawDisplayGoods.filter(good => {
-      const currentBookings = bookedItems.filter(b => b.code === good.code);
-      const bookedPcs = currentBookings.reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
-      const totalPcs = Math.round((good.dokhinkhan || 0) + (good.bonorupa || 0) + (good.banani || 0));
-      const stockPcs = Math.max(0, Math.round(totalPcs - bookedPcs));
-      return stockPcs <= 0;
-    });
-  }, [rawDisplayGoods, showOutOfStockOnly, bookedItems]);
+    if (showOutOfStockOnly) {
+      return rawDisplayGoods.filter(good => {
+        const currentBookings = bookedItems.filter(b => b.code === good.code);
+        const bookedPcs = currentBookings.reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
+        const totalPcs = Math.round((good.dokhinkhan || 0) + (good.bonorupa || 0) + (good.banani || 0));
+        const stockPcs = Math.max(0, Math.round(totalPcs - bookedPcs));
+        return stockPcs <= 0;
+      });
+    }
+    if (activeTab === 'stock') {
+      return rawDisplayGoods.filter(good => {
+        const currentBookings = bookedItems.filter(b => b.code === good.code);
+        const bookedPcs = currentBookings.reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
+        const totalPcs = Math.round((good.dokhinkhan || 0) + (good.bonorupa || 0) + (good.banani || 0));
+        const stockPcs = Math.max(0, Math.round(totalPcs - bookedPcs));
+        return stockPcs > 0;
+      });
+    }
+    return rawDisplayGoods;
+  }, [rawDisplayGoods, showOutOfStockOnly, bookedItems, activeTab]);
 
   const displayTools = useMemo(() => {
-    if (!showOutOfStockOnly) return rawDisplayTools;
-    return rawDisplayTools.filter(tool => {
-      const qty = Math.round(tool.qty || 0);
-      return qty <= 0;
-    });
-  }, [rawDisplayTools, showOutOfStockOnly]);
+    if (showOutOfStockOnly) {
+      return rawDisplayTools.filter(tool => {
+        const qty = Math.round(tool.qty || 0);
+        return qty <= 0;
+      });
+    }
+    if (activeTab === 'stock') {
+      return rawDisplayTools.filter(tool => {
+        const qty = Math.round(tool.qty || 0);
+        return qty > 0;
+      });
+    }
+    return rawDisplayTools;
+  }, [rawDisplayTools, showOutOfStockOnly, activeTab]);
 
   if (loading) {
     return (
@@ -5056,7 +5087,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     {(activeTab === 'search' || (showSearchBox && searchQuery.trim() !== '') ? filteredTiles : tiles).length}
                   </span>
                   <span className="inline-flex items-center gap-1.5 text-xs text-emerald-800 bg-emerald-50 border border-emerald-200/85 px-2.5 py-1 rounded-xl font-semibold shadow-xs font-sans">
-                    In Stock: {displayTiles.length - tilesStockStats.outOfStockCount} Products
+                    In Stock: {rawDisplayTiles.length - tilesStockStats.outOfStockCount} Products
                   </span>
                    <span 
                     onClick={() => setShowOutOfStockOnly(!showOutOfStockOnly)}
@@ -5506,7 +5537,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     {(activeTab === 'search' || (showSearchBox && searchQuery.trim() !== '') ? filteredGoods : goods).length}
                   </span>
                   <span className="inline-flex items-center gap-1.5 text-xs text-emerald-800 bg-emerald-50 border border-emerald-200/85 px-2.5 py-1 rounded-xl font-semibold shadow-xs font-sans">
-                    In Stock: {displayGoods.length - goodsStockStats.outOfStockCount} Products
+                    In Stock: {rawDisplayGoods.length - goodsStockStats.outOfStockCount} Products
                   </span>
                    <span 
                     onClick={() => setShowOutOfStockOnly(!showOutOfStockOnly)}
@@ -5876,7 +5907,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     {(activeTab === 'search' || (showSearchBox && searchQuery.trim() !== '') ? filteredTools : tools).length}
                   </span>
                   <span className="inline-flex items-center gap-1.5 text-xs text-emerald-800 bg-emerald-50 border border-emerald-200/85 px-2.5 py-1 rounded-xl font-semibold shadow-xs font-sans">
-                    In Stock: {displayTools.length - toolsStockStats.outOfStockCount} Products
+                    In Stock: {rawDisplayTools.length - toolsStockStats.outOfStockCount} Products
                   </span>
                    <span 
                     onClick={() => setShowOutOfStockOnly(!showOutOfStockOnly)}
