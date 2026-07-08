@@ -1503,6 +1503,90 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
   const isFullyApproved = isSuperAdmin || (currentUserDoc?.status === 'approved' && !isExpired && currentUserDoc?.role !== 'guest');
   const isApproved = !!user?.emailVerified && (isFullyApproved || ['landing', 'stock', 'home'].includes(activeTab));
 
+  const [rolePermissions, setRolePermissions] = useState<Record<string, Record<string, boolean>>>({});
+
+  // Firestore Snapshot listener for role based page on/off settings
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'settings', 'role_permissions'), (docSnap) => {
+      if (docSnap.exists()) {
+        setRolePermissions(docSnap.data().permissions || {});
+      } else {
+        setRolePermissions({});
+      }
+    });
+    return unsub;
+  }, []);
+
+  const hasPagePermission = (role: string | undefined, pageKey: string): boolean => {
+    const userRole = role || 'guest';
+    const isOwner = user?.email === 'bijoymahmudmunna@gmail.com' || userRole === 'supreme_admin';
+    if (isOwner) return true;
+
+    // Check custom configuration if defined
+    if (rolePermissions && rolePermissions[userRole] && typeof rolePermissions[userRole][pageKey] === 'boolean') {
+      return rolePermissions[userRole][pageKey];
+    }
+
+    // Default Fallback
+    switch (pageKey) {
+      case 'landing':
+        return true;
+      case 'search':
+        return isFullyApproved;
+      case 'master':
+        return isFullyApproved && isAdmin;
+      case 'booked':
+        return isFullyApproved;
+      case 'stock':
+        return true;
+      case 'quote':
+        return isSupremeAdmin;
+      case 'sales':
+        return isSupremeAdmin;
+      case 'billing':
+        return canSeeBilling;
+      case 'delivery_approval':
+        return isFullyApproved;
+      case 'master_sheet':
+        return isAdmin;
+      case 'users':
+        return isSupremeAdmin;
+      default:
+        return false;
+    }
+  };
+
+  const handleTogglePermission = async (role: string, pageKey: string, currentValue: boolean) => {
+    const updatedPermissions = {
+      ...rolePermissions,
+      [role]: {
+        ...(rolePermissions[role] || {}),
+        [pageKey]: !currentValue
+      }
+    };
+    try {
+      await setDoc(doc(db, 'settings', 'role_permissions'), { permissions: updatedPermissions });
+      toast.success(`Updated ${role} access for ${pageKey}`);
+    } catch (err) {
+      console.error("Error saving permissions:", err);
+      toast.error("Failed to update permission");
+    }
+  };
+
+  const ALL_PAGES = [
+    { key: 'landing', label: 'Home / Main Search' },
+    { key: 'search', label: 'Sanitary & Tiles Search Results' },
+    { key: 'master', label: 'Add Product / Upload' },
+    { key: 'booked', label: 'Booked Items' },
+    { key: 'stock', label: 'Stock Items' },
+    { key: 'quote', label: 'Make Quote' },
+    { key: 'sales', label: 'Sales / Invoice' },
+    { key: 'billing', label: 'Billing / Quotation' },
+    { key: 'delivery_approval', label: 'Delivery Approval' },
+    { key: 'master_sheet', label: 'Master Sheet' },
+    { key: 'users', label: 'User Management (Users Tab)' }
+  ];
+
   const canSeeBilling = isFullyApproved && currentUserDoc?.role !== 'admin';
   const canDeleteMasterItems = isAdmin && currentUserDoc?.role !== 'admin';
 
@@ -1968,23 +2052,11 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
   // Prevent unauthorized tab access
   useEffect(() => {
     if (isAuthReady && user) {
-      if (activeTab === 'master' && !isAdmin) {
-        setActiveTab('landing');
-      }
-      if (activeTab === 'users' && !isSupremeAdmin) {
-        setActiveTab('landing');
-      }
-      if (activeTab === 'master_sheet' && !isAdmin) {
-        setActiveTab('landing');
-      }
-      if ((activeTab === 'quote' || activeTab === 'sales') && !isSupremeAdmin) {
-        setActiveTab('landing');
-      }
-      if (activeTab === 'billing' && (!isFullyApproved || currentUserDoc?.role === 'admin')) {
+      if (activeTab !== 'landing' && !hasPagePermission(currentUserDoc?.role, activeTab)) {
         setActiveTab('landing');
       }
     }
-  }, [activeTab, isAdmin, isSupremeAdmin, isFullyApproved, currentUserDoc, isAuthReady, user]);
+  }, [activeTab, currentUserDoc, isAuthReady, user, rolePermissions]);
 
   // For regular users, default stockSubTab to 'tiles' and prevent selecting 'all'
   useEffect(() => {
@@ -2979,19 +3051,10 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
 
   // Redirect unauthorized users from restricted tabs
   useEffect(() => {
-    if (activeTab === 'master_sheet' && !isAdmin) {
-      setActiveTab('master');
-    }
-    if (activeTab === 'users' && !isSupremeAdmin) {
-      setActiveTab('master');
-    }
-    if ((activeTab === 'quote' || activeTab === 'sales') && !isSupremeAdmin) {
+    if (activeTab !== 'landing' && !hasPagePermission(currentUserDoc?.role, activeTab)) {
       setActiveTab('landing');
     }
-    if (activeTab === 'billing' && (!isFullyApproved || currentUserDoc?.role === 'admin')) {
-      setActiveTab('landing');
-    }
-  }, [activeTab, isAdmin, isSupremeAdmin, isFullyApproved, currentUserDoc]);
+  }, [activeTab, currentUserDoc, rolePermissions]);
 
   useEffect(() => {
     setShowOutOfStockOnly(false);
@@ -3747,74 +3810,79 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
             </div>
 
             <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-2">
-              <button
-                onClick={() => setActiveTab('landing')}
-                className={cn(
-                  "w-full px-4 py-3 rounded-xl font-medium transition-all flex items-center justify-start gap-3 uppercase tracking-wider text-sm text-left",
-                  activeTab === 'landing' ? "bg-white text-[#0f172a] font-bold shadow-sm" : "text-slate-300 hover:bg-white/10 hover:text-white"
-                )}
-              >
-                <Home className="w-5 h-5 text-emerald-400" /> Home
-              </button>
-
-              {isFullyApproved && (
-                <>
-                  {isAdmin && (
-                    <button
-                      onClick={() => setActiveTab('master')}
-                      className={cn(
-                        "w-full px-4 py-3 rounded-xl font-medium transition-all flex items-center justify-start gap-3 uppercase tracking-wider text-sm text-left",
-                        activeTab === 'master' ? "bg-white text-[#0f172a] font-bold shadow-sm" : "text-slate-300 hover:bg-white/10 hover:text-white"
-                      )}
-                    >
-                      <Grid3X3 className="w-5 h-5 text-blue-400" /> ADD PRODUCT
-                    </button>
+              {hasPagePermission(currentUserDoc?.role, 'landing') && (
+                <button
+                  onClick={() => setActiveTab('landing')}
+                  className={cn(
+                    "w-full px-4 py-3 rounded-xl font-medium transition-all flex items-center justify-start gap-3 uppercase tracking-wider text-sm text-left",
+                    activeTab === 'landing' ? "bg-white text-[#0f172a] font-bold shadow-sm" : "text-slate-300 hover:bg-white/10 hover:text-white"
                   )}
-                  <button
-                    onClick={() => setActiveTab('booked')}
-                    className={cn(
-                      "w-full px-4 py-3 rounded-xl font-medium transition-all flex items-center justify-start gap-3 uppercase tracking-wider text-sm text-left",
-                      activeTab === 'booked' ? "bg-white text-[#0f172a] font-bold shadow-sm" : "text-slate-300 hover:bg-white/10 hover:text-white"
-                    )}
-                  >
-                    <FileText className="w-5 h-5 text-amber-400" /> Booked Item
-                  </button>
-                </>
+                >
+                  <Home className="w-5 h-5 text-emerald-400" /> Home
+                </button>
               )}
-              <button
-                onClick={() => setActiveTab('stock')}
-                className={cn(
-                  "w-full px-4 py-3 rounded-xl font-medium transition-all flex items-center justify-start gap-3 uppercase tracking-wider text-sm text-left",
-                  activeTab === 'stock' ? "bg-white text-[#0f172a] font-bold shadow-sm" : "text-slate-300 hover:bg-white/10 hover:text-white"
-                )}
-              >
-                <Database className="w-5 h-5 text-rose-400" /> Stock Item
-              </button>
 
-              {isSupremeAdmin && (
-                <>
-                  <button
-                    onClick={() => setActiveTab('quote')}
-                    className={cn(
-                      "w-full px-4 py-3 rounded-xl font-medium transition-all flex items-center justify-start gap-3 uppercase tracking-wider text-sm text-left",
-                      activeTab === 'quote' ? "bg-white text-[#0f172a] font-bold shadow-sm" : "text-slate-300 hover:bg-white/10 hover:text-white"
-                    )}
-                  >
-                    <Calculator className="w-5 h-5 text-purple-400" /> Make Quote
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab('sales')}
-                    className={cn(
-                      "w-full px-4 py-3 rounded-xl font-medium transition-all flex items-center justify-start gap-3 uppercase tracking-wider text-sm text-left",
-                      activeTab === 'sales' ? "bg-white text-[#0f172a] font-bold shadow-sm" : "text-slate-300 hover:bg-white/10 hover:text-white"
-                    )}
-                  >
-                    <FileText className="w-5 h-5 text-indigo-400" /> Sales / Invoice
-                  </button>
-                </>
+              {hasPagePermission(currentUserDoc?.role, 'master') && (
+                <button
+                  onClick={() => setActiveTab('master')}
+                  className={cn(
+                    "w-full px-4 py-3 rounded-xl font-medium transition-all flex items-center justify-start gap-3 uppercase tracking-wider text-sm text-left",
+                    activeTab === 'master' ? "bg-white text-[#0f172a] font-bold shadow-sm" : "text-slate-300 hover:bg-white/10 hover:text-white"
+                  )}
+                >
+                  <Grid3X3 className="w-5 h-5 text-blue-400" /> ADD PRODUCT
+                </button>
               )}
-              {canSeeBilling && (
+
+              {hasPagePermission(currentUserDoc?.role, 'booked') && (
+                <button
+                  onClick={() => setActiveTab('booked')}
+                  className={cn(
+                    "w-full px-4 py-3 rounded-xl font-medium transition-all flex items-center justify-start gap-3 uppercase tracking-wider text-sm text-left",
+                    activeTab === 'booked' ? "bg-white text-[#0f172a] font-bold shadow-sm" : "text-slate-300 hover:bg-white/10 hover:text-white"
+                  )}
+                >
+                  <FileText className="w-5 h-5 text-amber-400" /> Booked Item
+                </button>
+              )}
+
+              {hasPagePermission(currentUserDoc?.role, 'stock') && (
+                <button
+                  onClick={() => setActiveTab('stock')}
+                  className={cn(
+                    "w-full px-4 py-3 rounded-xl font-medium transition-all flex items-center justify-start gap-3 uppercase tracking-wider text-sm text-left",
+                    activeTab === 'stock' ? "bg-white text-[#0f172a] font-bold shadow-sm" : "text-slate-300 hover:bg-white/10 hover:text-white"
+                  )}
+                >
+                  <Database className="w-5 h-5 text-rose-400" /> Stock Item
+                </button>
+              )}
+
+              {hasPagePermission(currentUserDoc?.role, 'quote') && (
+                <button
+                  onClick={() => setActiveTab('quote')}
+                  className={cn(
+                    "w-full px-4 py-3 rounded-xl font-medium transition-all flex items-center justify-start gap-3 uppercase tracking-wider text-sm text-left",
+                    activeTab === 'quote' ? "bg-white text-[#0f172a] font-bold shadow-sm" : "text-slate-300 hover:bg-white/10 hover:text-white"
+                  )}
+                >
+                  <Calculator className="w-5 h-5 text-purple-400" /> Make Quote
+                </button>
+              )}
+
+              {hasPagePermission(currentUserDoc?.role, 'sales') && (
+                <button
+                  onClick={() => setActiveTab('sales')}
+                  className={cn(
+                    "w-full px-4 py-3 rounded-xl font-medium transition-all flex items-center justify-start gap-3 uppercase tracking-wider text-sm text-left",
+                    activeTab === 'sales' ? "bg-white text-[#0f172a] font-bold shadow-sm" : "text-slate-300 hover:bg-white/10 hover:text-white"
+                  )}
+                >
+                  <FileText className="w-5 h-5 text-indigo-400" /> Sales / Invoice
+                </button>
+              )}
+
+              {hasPagePermission(currentUserDoc?.role, 'billing') && (
                 <button
                   onClick={() => setActiveTab('billing')}
                   className={cn(
@@ -3825,7 +3893,8 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   <FileText className="w-5 h-5 text-emerald-400" /> Billing / Quotation
                 </button>
               )}
-              {isFullyApproved && (
+
+              {hasPagePermission(currentUserDoc?.role, 'delivery_approval') && (
                 <button
                   onClick={() => setActiveTab('delivery_approval')}
                   className={cn(
@@ -3836,7 +3905,8 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   <Truck className="w-5 h-5 text-blue-400" /> Delivery Approval
                 </button>
               )}
-              {isAdmin && (
+
+              {hasPagePermission(currentUserDoc?.role, 'master_sheet') && (
                 <button
                   onClick={() => setActiveTab('master_sheet')}
                   className={cn(
@@ -3847,7 +3917,8 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   <Database className="w-5 h-5 text-pink-400" /> Master Sheet
                 </button>
               )}
-              {isSupremeAdmin && (
+
+              {hasPagePermission(currentUserDoc?.role, 'users') && (
                 <button
                   onClick={() => setActiveTab('users')}
                   className={cn(
@@ -4016,16 +4087,18 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
               className="md:hidden fixed top-16 left-0 right-0 z-40 border-t border-gray-200 bg-white shadow-xl max-h-[calc(100vh-8rem)] overflow-y-auto"
             >
               <div className="p-4 space-y-2">
-                <button
-                  onClick={() => { setActiveTab('landing'); setIsMenuOpen(false); }}
-                  className={cn(
-                    "w-full px-4 py-3 rounded-xl font-medium flex items-center justify-start gap-3 uppercase tracking-wider text-sm text-left",
-                    activeTab === 'landing' ? "bg-[#0f172a] text-white font-bold" : "text-gray-500 hover:bg-gray-50"
-                  )}
-                >
-                  <Home className="w-5 h-5 text-emerald-500" /> Home
-                </button>
-                {isFullyApproved && (
+                {hasPagePermission(currentUserDoc?.role, 'landing') && (
+                  <button
+                    onClick={() => { setActiveTab('landing'); setIsMenuOpen(false); }}
+                    className={cn(
+                      "w-full px-4 py-3 rounded-xl font-medium flex items-center justify-start gap-3 uppercase tracking-wider text-sm text-left",
+                      activeTab === 'landing' ? "bg-[#0f172a] text-white font-bold" : "text-gray-500 hover:bg-gray-50"
+                    )}
+                  >
+                    <Home className="w-5 h-5 text-emerald-500" /> Home
+                  </button>
+                )}
+                {hasPagePermission(currentUserDoc?.role, 'search') && (
                   <button
                     onClick={() => { setActiveTab('search'); setIsMenuOpen(false); }}
                     className={cn(
@@ -4036,64 +4109,62 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     <Search className="w-5 h-5 text-sky-500" /> Search
                   </button>
                 )}
-                {isFullyApproved && (
-                  <>
-                    {isAdmin && (
-                      <button
-                        onClick={() => { setActiveTab('master'); setIsMenuOpen(false); }}
-                        className={cn(
-                          "w-full px-4 py-3 rounded-xl font-medium flex items-center justify-start gap-3 uppercase tracking-wider text-sm text-left",
-                          activeTab === 'master' ? "bg-[#0f172a] text-white font-bold" : "text-gray-500 hover:bg-gray-50"
-                        )}
-                      >
-                        <Grid3X3 className="w-5 h-5 text-blue-500" /> ADD PRODUCT
-                      </button>
+                {hasPagePermission(currentUserDoc?.role, 'master') && (
+                  <button
+                    onClick={() => { setActiveTab('master'); setIsMenuOpen(false); }}
+                    className={cn(
+                      "w-full px-4 py-3 rounded-xl font-medium flex items-center justify-start gap-3 uppercase tracking-wider text-sm text-left",
+                      activeTab === 'master' ? "bg-[#0f172a] text-white font-bold" : "text-gray-500 hover:bg-gray-50"
                     )}
-                    <button
-                      onClick={() => { setActiveTab('booked'); setIsMenuOpen(false); }}
-                      className={cn(
-                        "w-full px-4 py-3 rounded-xl font-medium flex items-center gap-3 uppercase tracking-wider text-sm text-left",
-                        activeTab === 'booked' ? "bg-[#0f172a] text-white font-bold" : "text-gray-500 hover:bg-gray-50"
-                      )}
-                    >
-                      <FileText className="w-5 h-5 text-amber-500" /> Booked Item
-                    </button>
-                  </>
+                  >
+                    <Grid3X3 className="w-5 h-5 text-blue-500" /> ADD PRODUCT
+                  </button>
                 )}
-                <button
-                  onClick={() => { setActiveTab('stock'); setIsMenuOpen(false); }}
-                  className={cn(
-                    "w-full px-4 py-3 rounded-xl font-medium flex items-center gap-3 uppercase tracking-wider text-sm",
-                    activeTab === 'stock' ? "bg-[#0f172a] text-white font-bold" : "text-gray-500 hover:bg-gray-50"
-                  )}
-                >
-                  <Database className="w-5 h-5" /> Stock Item
-                </button>
-
-                {isSupremeAdmin && (
-                  <>
-                    <button
-                      onClick={() => { setActiveTab('quote'); setIsMenuOpen(false); }}
-                      className={cn(
-                        "w-full px-4 py-3 rounded-xl font-medium flex items-center gap-3 uppercase tracking-wider text-sm",
-                        activeTab === 'quote' ? "bg-[#0f172a] text-white font-bold" : "text-gray-500 hover:bg-gray-50"
-                      )}
-                    >
-                      <Calculator className="w-5 h-5" /> Make Quote
-                    </button>
-
-                    <button
-                      onClick={() => { setActiveTab('sales'); setIsMenuOpen(false); }}
-                      className={cn(
-                        "w-full px-4 py-3 rounded-xl font-medium flex items-center gap-3 uppercase tracking-wider text-sm",
-                        activeTab === 'sales' ? "bg-[#0f172a] text-white font-bold" : "text-gray-500 hover:bg-gray-50"
-                      )}
-                    >
-                      <FileText className="w-5 h-5" /> Sales / Invoice
-                    </button>
-                  </>
+                {hasPagePermission(currentUserDoc?.role, 'booked') && (
+                  <button
+                    onClick={() => { setActiveTab('booked'); setIsMenuOpen(false); }}
+                    className={cn(
+                      "w-full px-4 py-3 rounded-xl font-medium flex items-center gap-3 uppercase tracking-wider text-sm text-left",
+                      activeTab === 'booked' ? "bg-[#0f172a] text-white font-bold" : "text-gray-500 hover:bg-gray-50"
+                    )}
+                  >
+                    <FileText className="w-5 h-5 text-amber-500" /> Booked Item
+                  </button>
                 )}
-                {canSeeBilling && (
+                {hasPagePermission(currentUserDoc?.role, 'stock') && (
+                  <button
+                    onClick={() => { setActiveTab('stock'); setIsMenuOpen(false); }}
+                    className={cn(
+                      "w-full px-4 py-3 rounded-xl font-medium flex items-center gap-3 uppercase tracking-wider text-sm",
+                      activeTab === 'stock' ? "bg-[#0f172a] text-white font-bold" : "text-gray-500 hover:bg-gray-50"
+                    )}
+                  >
+                    <Database className="w-5 h-5" /> Stock Item
+                  </button>
+                )}
+                {hasPagePermission(currentUserDoc?.role, 'quote') && (
+                  <button
+                    onClick={() => { setActiveTab('quote'); setIsMenuOpen(false); }}
+                    className={cn(
+                      "w-full px-4 py-3 rounded-xl font-medium flex items-center gap-3 uppercase tracking-wider text-sm",
+                      activeTab === 'quote' ? "bg-[#0f172a] text-white font-bold" : "text-gray-500 hover:bg-gray-50"
+                    )}
+                  >
+                    <Calculator className="w-5 h-5" /> Make Quote
+                  </button>
+                )}
+                {hasPagePermission(currentUserDoc?.role, 'sales') && (
+                  <button
+                    onClick={() => { setActiveTab('sales'); setIsMenuOpen(false); }}
+                    className={cn(
+                      "w-full px-4 py-3 rounded-xl font-medium flex items-center gap-3 uppercase tracking-wider text-sm",
+                      activeTab === 'sales' ? "bg-[#0f172a] text-white font-bold" : "text-gray-500 hover:bg-gray-50"
+                    )}
+                  >
+                    <FileText className="w-5 h-5" /> Sales / Invoice
+                  </button>
+                )}
+                {hasPagePermission(currentUserDoc?.role, 'billing') && (
                   <button
                     onClick={() => { setActiveTab('billing'); setIsMenuOpen(false); }}
                     className={cn(
@@ -4104,7 +4175,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     <FileText className="w-5 h-5" /> Billing / Quotation
                   </button>
                 )}
-                {isFullyApproved && (
+                {hasPagePermission(currentUserDoc?.role, 'delivery_approval') && (
                   <button
                     onClick={() => { setActiveTab('delivery_approval'); setIsMenuOpen(false); }}
                     className={cn(
@@ -4115,7 +4186,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     <Truck className="w-5 h-5" /> Delivery Approval
                   </button>
                 )}
-                {isAdmin && (
+                {hasPagePermission(currentUserDoc?.role, 'master_sheet') && (
                   <button
                     onClick={() => { setActiveTab('master_sheet'); setIsMenuOpen(false); }}
                     className={cn(
@@ -4126,7 +4197,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     <Database className="w-5 h-5" /> Master Sheet
                   </button>
                 )}
-                {isSupremeAdmin && (
+                {hasPagePermission(currentUserDoc?.role, 'users') && (
                   <button
                     onClick={() => { setActiveTab('users'); setIsMenuOpen(false); }}
                     className={cn(
@@ -4683,6 +4754,126 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     {users.filter(u => user?.email === 'bijoymahmudmunna@gmail.com' || u.email !== 'bijoymahmudmunna@gmail.com').length} Total
                   </span>
                 </h2>
+              </div>
+
+              {/* Role-Based Page Access Control Matrix */}
+              <div className="bg-white rounded-3xl p-6 border-2 border-slate-100 shadow-sm space-y-6">
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                    <ShieldCheck className="w-5 h-5 text-indigo-600" />
+                    Role-Based Page Access Settings
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Control visibility and permission for each page dynamically based on user roles. Supreme admins always retain full access to all areas.
+                  </p>
+                </div>
+
+                <div className="overflow-x-auto border border-slate-100 rounded-2xl">
+                  <table className="w-full min-w-[800px] border-collapse text-left">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-100 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                        <th className="px-6 py-4 font-black">Page / App Feature</th>
+                        <th className="px-4 py-4 text-center font-black">Guest (অতিথি)</th>
+                        <th className="px-4 py-4 text-center font-black">User (সাধারণ ইউজার)</th>
+                        <th className="px-4 py-4 text-center font-black">Admin (অ্যাডমিন)</th>
+                        <th className="px-4 py-4 text-center font-black">Super Admin (সুপার অ্যাডমিন)</th>
+                        <th className="px-4 py-4 text-center font-black bg-indigo-50/30 rounded-tr-xl">Supreme Admin</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-sm">
+                      {ALL_PAGES.map((page) => (
+                        <tr key={page.key} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="px-6 py-4">
+                            <span className="font-bold text-slate-800 text-sm block">{page.label}</span>
+                            <span className="text-[10px] text-slate-400 font-mono">ID: {page.key}</span>
+                          </td>
+                          {/* Guest */}
+                          <td className="px-4 py-4 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleTogglePermission('guest', page.key, hasPagePermission('guest', page.key))}
+                              className={cn(
+                                "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500/20",
+                                hasPagePermission('guest', page.key) ? "bg-emerald-500" : "bg-slate-200"
+                              )}
+                            >
+                              <span
+                                className={cn(
+                                  "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out",
+                                  hasPagePermission('guest', page.key) ? "translate-x-5" : "translate-x-0"
+                                )}
+                              />
+                            </button>
+                          </td>
+                          {/* Regular User */}
+                          <td className="px-4 py-4 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleTogglePermission('user', page.key, hasPagePermission('user', page.key))}
+                              className={cn(
+                                "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500/20",
+                                hasPagePermission('user', page.key) ? "bg-emerald-500" : "bg-slate-200"
+                              )}
+                            >
+                              <span
+                                className={cn(
+                                  "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out",
+                                  hasPagePermission('user', page.key) ? "translate-x-5" : "translate-x-0"
+                                )}
+                              />
+                            </button>
+                          </td>
+                          {/* Admin */}
+                          <td className="px-4 py-4 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleTogglePermission('admin', page.key, hasPagePermission('admin', page.key))}
+                              className={cn(
+                                "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500/20",
+                                hasPagePermission('admin', page.key) ? "bg-emerald-500" : "bg-slate-200"
+                              )}
+                            >
+                              <span
+                                className={cn(
+                                  "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out",
+                                  hasPagePermission('admin', page.key) ? "translate-x-5" : "translate-x-0"
+                                )}
+                              />
+                            </button>
+                          </td>
+                          {/* Super Admin */}
+                          <td className="px-4 py-4 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleTogglePermission('super_admin', page.key, hasPagePermission('super_admin', page.key))}
+                              className={cn(
+                                "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500/20",
+                                hasPagePermission('super_admin', page.key) ? "bg-emerald-500" : "bg-slate-200"
+                              )}
+                            >
+                              <span
+                                className={cn(
+                                  "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out",
+                                  hasPagePermission('super_admin', page.key) ? "translate-x-5" : "translate-x-0"
+                                )}
+                              />
+                            </button>
+                          </td>
+                          {/* Supreme Admin (Always Allowed) */}
+                          <td className="px-4 py-4 text-center bg-indigo-50/10">
+                            <button
+                              disabled
+                              className="relative inline-flex h-6 w-11 shrink-0 cursor-not-allowed rounded-full border-2 border-transparent bg-indigo-500/20 transition-colors duration-200 ease-in-out focus:outline-none"
+                            >
+                              <span className="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out translate-x-5" />
+                            </button>
+                            <span className="block text-[9px] text-indigo-600 font-bold mt-1">Always Allowed</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
 
               {/* Administrators Table */}
@@ -7774,21 +7965,41 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
 
                     // Stock validation for bookedItems
                     if (category === 'bookedItems') {
-                      const sourceItem = [...tiles, ...goods].find(i => 
-                        ((i as any).code === data.code && data.code !== '') || 
-                        (i as any).name === data.name
-                      );
+                      const sourceItem = [...tiles, ...goods].find(i => {
+                        const isTile = 'totalSft' in i;
+                        if (isTile) {
+                          return i.name === data.name && 
+                                 i.brand === data.brand && 
+                                 i.size === data.size;
+                        } else {
+                          if (data.code && (i as any).code) {
+                            return (i as any).code === data.code;
+                          }
+                          return (i as any).brand === data.brand && (i as any).description === data.name;
+                        }
+                      });
                       
                       if (sourceItem) {
                         const isTile = 'totalSft' in sourceItem;
                         const totalSft = isTile ? (sourceItem as any).totalSft : 0;
                         const totalPcs = isTile ? (sourceItem as any).totalPcs : (((sourceItem as any).dokhinkhan || 0) + ((sourceItem as any).bonorupa || 0) + ((sourceItem as any).banani || 0));
                         
-                        // Other bookings for this item
-                        const otherBookings = bookedItems.filter(b => 
-                          b.id !== (editingItem?.item.id) && 
-                          ((b.code === data.code && data.code !== '') || b.name === data.name)
-                        );
+                        // Other bookings for this exact same item
+                        const otherBookings = bookedItems.filter(b => {
+                          if (b.id === (editingItem?.item.id)) return false;
+                          if (b.deleted) return false;
+                          
+                          if (isTile) {
+                            return b.name === data.name && 
+                                   b.brand === data.brand && 
+                                   b.size === data.size;
+                          } else {
+                            if (data.code && b.code) {
+                              return b.code === data.code;
+                            }
+                            return b.brand === data.brand && b.name === data.name;
+                          }
+                        });
                         
                         const bookedSft = otherBookings.reduce((sum, b) => sum + (b.qtySft || 0), 0);
                         const bookedPcs = otherBookings.reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
@@ -7796,19 +8007,16 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                         const availableSft = Number((totalSft - bookedSft).toFixed(2));
                         const availablePcs = totalPcs - bookedPcs;
                         
-                        // Round available stock for comparison to match what user sees
-                        const roundedAvailableSft = Math.round(availableSft);
-                        const roundedAvailablePcs = Math.round(availablePcs);
-                        
                         const inputQtySft = Number(data.qtySft || 0);
                         const inputQtyPcs = Number(data.qtyPcs || 0);
                         
-                        const isShortageSft = inputQtySft > roundedAvailableSft;
-                        const isShortagePcs = inputQtyPcs > roundedAvailablePcs;
+                        // Use precise float comparisons to prevent rounding edge errors
+                        const isShortageSft = Number(inputQtySft.toFixed(2)) > Number(availableSft.toFixed(2));
+                        const isShortagePcs = inputQtyPcs > availablePcs;
 
                         if (isShortageSft || isShortagePcs) {
-                          const shortSft = Math.max(0, inputQtySft - roundedAvailableSft);
-                          const shortPcs = Math.max(0, inputQtyPcs - roundedAvailablePcs);
+                          const shortSft = Math.max(0, inputQtySft - availableSft);
+                          const shortPcs = Math.max(0, inputQtyPcs - availablePcs);
                           
                           let errorMsg = "This product does not have enough stock available. You need an additional ";
                           if (shortSft > 0 && shortPcs > 0) {

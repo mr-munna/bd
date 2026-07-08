@@ -36,7 +36,8 @@ import {
   Grid3X3,
   Wrench,
   Loader2,
-  Truck
+  Truck,
+  Pen
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Tile, Good, Tool, DeliveryApproval, DeliveryApprovalItem, UserDoc } from '../types';
@@ -159,6 +160,7 @@ export const DeliveryApprovalManager: React.FC<DeliveryApprovalManagerProps> = (
   const [gatePassNo, setGatePassNo] = useState('');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingChallanId, setEditingChallanId] = useState<string | null>(null);
 
   // Filter State
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
@@ -306,6 +308,50 @@ export const DeliveryApprovalManager: React.FC<DeliveryApprovalManagerProps> = (
     toast.success("Product removed");
   };
 
+  const handleEditChallan = (item: DeliveryApproval) => {
+    setEditingChallanId(item.id);
+    
+    // Support both multi-item structure and legacy single-item structure
+    const itemsToRender = item.items && item.items.length > 0 
+      ? item.items 
+      : [{
+          productName: item.productName || 'N/A',
+          productCode: item.productCode || 'N/A',
+          size: item.size || 'N/A',
+          brand: item.brand || 'N/A',
+          quantity: item.quantity || 0,
+          unit: item.unit || 'pcs',
+          productType: (item as any).productType,
+          productId: (item as any).productId
+        }];
+        
+    setItemsList(itemsToRender);
+    setClientName(item.clientName && item.clientName !== 'N/A' ? item.clientName : '');
+    setClientPhone(item.clientPhone && item.clientPhone !== 'N/A' ? item.clientPhone : '');
+    setSiteAddress(item.siteAddress && item.siteAddress !== 'N/A' ? item.siteAddress : '');
+    setReference(item.reference && item.reference !== 'N/A' ? item.reference : '');
+    setRemark(item.remark && item.remark !== 'N/A' ? item.remark : '');
+    setVehicleNumber(item.vehicleNumber && item.vehicleNumber !== 'N/A' ? item.vehicleNumber : '');
+    setDriverName(item.driverName && item.driverName !== 'N/A' ? item.driverName : '');
+    setDriverPhone(item.driverPhone && item.driverPhone !== 'N/A' ? item.driverPhone : '');
+    setGatePassNo(item.gatePassNo && item.gatePassNo !== 'N/A' ? item.gatePassNo : '');
+    
+    // Reset product input temporary fields
+    setProductSearch('');
+    setSelectedProduct(null);
+    setQuantity('');
+    
+    toast.success("Loaded request details into form for editing!");
+    
+    // Smooth scroll to form
+    const container = document.getElementById('delivery-challan-manager');
+    if (container) {
+      container.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
   // Handle request submission
   const handleSubmitRequest = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -340,7 +386,7 @@ export const DeliveryApprovalManager: React.FC<DeliveryApprovalManagerProps> = (
       // For legacy rendering compatibility, we also save the first item's details at top-level
       const firstItem = finalItems[0];
 
-      const docData = {
+      const docData: any = {
         items: finalItems,
         productCode: firstItem.productCode,
         productName: firstItem.productName,
@@ -357,9 +403,6 @@ export const DeliveryApprovalManager: React.FC<DeliveryApprovalManagerProps> = (
         driverName: driverName.trim() || 'N/A',
         driverPhone: driverPhone.trim() || 'N/A',
         gatePassNo: gatePassNo.trim() || 'N/A',
-        submittedBy: user?.uid || 'anonymous',
-        submittedByName: (currentUserDoc?.displayName && currentUserDoc.displayName !== 'Unknown User' && currentUserDoc.displayName.trim() !== '') ? currentUserDoc.displayName : (user?.email || 'Unknown User'),
-        createdAt: new Date().toISOString(),
         supremeApproved: false,
         supremeApprovedBy: '',
         superApproved: false,
@@ -367,8 +410,17 @@ export const DeliveryApprovalManager: React.FC<DeliveryApprovalManagerProps> = (
         status: 'pending' as const
       };
 
-      await addDoc(collection(db, 'delivery_approvals'), docData);
-      toast.success("Delivery request submitted successfully!");
+      if (editingChallanId) {
+        await updateDoc(doc(db, 'delivery_approvals', editingChallanId), docData);
+        toast.success("Delivery request updated and resubmitted successfully!");
+      } else {
+        docData.submittedBy = user?.uid || 'anonymous';
+        docData.submittedByName = (currentUserDoc?.displayName && currentUserDoc.displayName !== 'Unknown User' && currentUserDoc.displayName.trim() !== '') ? currentUserDoc.displayName : (user?.email || 'Unknown User');
+        docData.createdAt = new Date().toISOString();
+
+        await addDoc(collection(db, 'delivery_approvals'), docData);
+        toast.success("Delivery request submitted successfully!");
+      }
 
       // Send notification to Supreme & Super admins
       try {
@@ -540,6 +592,7 @@ Inventory Management System`;
       }
       
       // Clear form
+      setEditingChallanId(null);
       setItemsList([]);
       setProductSearch('');
       setSelectedProduct(null);
@@ -951,6 +1004,82 @@ Inventory Management System`;
     }
   };
 
+  const sendStatusNotificationEmail = async (item: DeliveryApproval, status: 'approved' | 'rejected') => {
+    try {
+      const requester = users.find(u => u.id === item.submittedBy);
+      let targetEmail = requester?.email;
+      if (!targetEmail && item.submittedBy === user?.uid) {
+        targetEmail = user?.email;
+      }
+      if (!targetEmail) {
+        console.warn("Could not find email address for requester:", item.submittedBy);
+        return;
+      }
+
+      const itemsToRender = item.items && item.items.length > 0 
+        ? item.items 
+        : [{
+            productName: item.productName || 'N/A',
+            productCode: item.productCode || 'N/A',
+            size: item.size || 'N/A',
+            brand: item.brand || 'N/A',
+            quantity: item.quantity || 0,
+            unit: item.unit || 'pcs'
+          }];
+
+      const itemsSummary = itemsToRender.map(i => 
+        `- Product: ${i.productName} (${i.brand} | ${i.productCode})
+  Quantity: ${i.quantity} ${i.unit || 'pcs'}
+  Size: ${i.size || 'N/A'}`
+      ).join('\n\n');
+
+      const resolvedName = resolveUserDisplay(item.submittedByName, item.submittedBy, users);
+      const subject = `[DELIVERY REQUEST ${status.toUpperCase()}] Your Delivery Challan has been ${status}`;
+      const text = `Dear ${resolvedName || 'User'},
+
+Your Delivery Challan clearance request has been ${status.toUpperCase()} by the administrator.
+
+Details of the Request:
+----------------------
+Client Name: ${item.clientName || 'N/A'}
+Site / Delivery Address: ${item.siteAddress || 'N/A'}
+Reference: ${item.reference || 'N/A'}
+Vehicle Number: ${item.vehicleNumber || 'N/A'}
+Gate Pass No: ${item.gatePassNo || 'N/A'}
+Status: ${status.toUpperCase()}
+
+Products List:
+-------------
+${itemsSummary}
+
+Please check the application for further details.
+
+Best regards,
+Inventory Management System`;
+
+      await fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'delivery_status_update',
+          category: 'delivery_approvals',
+          itemName: itemsToRender[0]?.productName || 'Delivery Request',
+          notifyEmails: [targetEmail],
+          customSubject: subject,
+          customText: text,
+          details: {
+            clientName: item.clientName,
+            siteAddress: item.siteAddress,
+            status: status
+          }
+        })
+      });
+      console.log(`Email notification sent to ${targetEmail} regarding status: ${status}`);
+    } catch (err) {
+      console.error("Failed to send status notification email:", err);
+    }
+  };
+
   // Approve request
   const handleApprove = async (approvalId: string, role: 'supreme' | 'super') => {
     try {
@@ -985,6 +1114,7 @@ Inventory Management System`;
 
       if (previousStatus !== 'approved' && updates.status === 'approved') {
         await deductStock(item);
+        await sendStatusNotificationEmail(item, 'approved');
       }
     } catch (error: any) {
       toast.error(`Approval failed: ${error.message}`);
@@ -1015,6 +1145,8 @@ Inventory Management System`;
 
       await updateDoc(doc(db, 'delivery_approvals', approvalId), updates);
       toast.error("Delivery request rejected");
+
+      await sendStatusNotificationEmail(item, 'rejected');
 
       if (previousStatus === 'approved') {
         await addStockBack(item);
@@ -1430,9 +1562,19 @@ Inventory Management System`;
         <div className="lg:col-span-4 bg-white rounded-2xl border border-gray-100 shadow-xl p-6 h-fit space-y-6">
           <div className="border-b border-gray-100 pb-4">
             <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-              <Plus className="w-5 h-5 text-blue-600" /> Delivery Challan Form
+              {editingChallanId ? (
+                <>
+                  <Pen className="w-5 h-5 text-indigo-600" /> Edit Delivery Challan
+                </>
+              ) : (
+                <>
+                  <Plus className="w-5 h-5 text-blue-600" /> Delivery Challan Form
+                </>
+              )}
             </h2>
-            <p className="text-xs text-gray-500 mt-1">Fill out item, transport & client details for delivery clearance.</p>
+            <p className="text-xs text-gray-500 mt-1">
+              {editingChallanId ? 'Update item, transport & client details for this request.' : 'Fill out item, transport & client details for delivery clearance.'}
+            </p>
           </div>
 
           <form onSubmit={handleSubmitRequest} className="space-y-4">
@@ -1681,21 +1823,50 @@ Inventory Management System`;
               </div>
             </div>
 
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm shadow-lg transition-colors flex items-center justify-center gap-2"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" /> Submitting...
-                </>
-              ) : (
-                <>
-                  <Check className="w-4 h-4" /> Submit Request
-                </>
+            <div className="flex gap-3">
+              {editingChallanId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingChallanId(null);
+                    setItemsList([]);
+                    setClientName('');
+                    setClientPhone('');
+                    setSiteAddress('');
+                    setReference('');
+                    setRemark('');
+                    setVehicleNumber('');
+                    setDriverName('');
+                    setDriverPhone('');
+                    setGatePassNo('');
+                    setProductSearch('');
+                    setSelectedProduct(null);
+                    setQuantity('');
+                    toast.success("Edit cancelled");
+                  }}
+                  className="flex-1 py-2.5 bg-gray-500 hover:bg-gray-600 text-white rounded-xl font-bold text-sm shadow-lg transition-colors flex items-center justify-center gap-2"
+                >
+                  Cancel Edit
+                </button>
               )}
-            </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className={`py-2.5 text-white rounded-xl font-bold text-sm shadow-lg transition-colors flex items-center justify-center gap-2 ${
+                  editingChallanId ? 'flex-1 bg-indigo-600 hover:bg-indigo-700' : 'w-full bg-blue-600 hover:bg-blue-700'
+                }`}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> {editingChallanId ? 'Updating...' : 'Submitting...'}
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" /> {editingChallanId ? 'Update Request' : 'Submit Request'}
+                  </>
+                )}
+              </button>
+            </div>
           </form>
         </div>
 
@@ -1980,6 +2151,17 @@ Inventory Management System`;
                               </button>
                             )}
                           </div>
+                        )}
+
+                        {/* Edit Button (Visible when NOT approved) */}
+                        {item.status !== 'approved' && (
+                          <button
+                            onClick={() => handleEditChallan(item)}
+                            className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-md transition-colors"
+                            title="Edit / Modify Delivery Request"
+                          >
+                            <Pen className="w-3.5 h-3.5" /> Edit Request
+                          </button>
                         )}
 
                          {/* Print / Download Buttons (Only visible when fully cleared) */}
