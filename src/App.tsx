@@ -1519,8 +1519,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
 
   const hasPagePermission = (role: string | undefined, pageKey: string): boolean => {
     const userRole = role || 'guest';
-    const isOwner = user?.email === 'bijoymahmudmunna@gmail.com' || userRole === 'supreme_admin';
-    if (isOwner) return true;
+    if (userRole === 'supreme_admin') return true;
 
     // Check custom configuration if defined
     if (rolePermissions && rolePermissions[userRole] && typeof rolePermissions[userRole][pageKey] === 'boolean') {
@@ -1528,32 +1527,44 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
     }
 
     // Default Fallback
+    const defaultIsAdmin = ['admin', 'super_admin'].includes(userRole);
+    const defaultIsSuperAdmin = ['super_admin'].includes(userRole);
+    const defaultIsFullyApproved = ['user', 'admin', 'super_admin'].includes(userRole);
+    const defaultCanSeeBilling = defaultIsFullyApproved && userRole !== 'admin';
+
     switch (pageKey) {
       case 'landing':
         return true;
       case 'search':
-        return isFullyApproved;
+        return defaultIsFullyApproved;
       case 'master':
-        return isFullyApproved && isAdmin;
+        return defaultIsFullyApproved && defaultIsAdmin;
       case 'booked':
-        return isFullyApproved;
+        return defaultIsFullyApproved;
       case 'stock':
         return true;
       case 'quote':
-        return isSupremeAdmin;
+        return false;
       case 'sales':
-        return isSupremeAdmin;
+        return false;
       case 'billing':
-        return canSeeBilling;
+        return defaultCanSeeBilling;
       case 'delivery_approval':
-        return isFullyApproved;
+        return defaultIsFullyApproved;
       case 'master_sheet':
-        return isAdmin;
+        return defaultIsAdmin;
       case 'users':
-        return isSupremeAdmin;
+        return false;
       default:
         return false;
     }
+  };
+
+  const canCurrentUserAccessPage = (pageKey: string): boolean => {
+    if (user?.email === 'bijoymahmudmunna@gmail.com' || currentUserDoc?.role === 'supreme_admin') {
+      return true;
+    }
+    return hasPagePermission(currentUserDoc?.role, pageKey);
   };
 
   const handleTogglePermission = async (role: string, pageKey: string, currentValue: boolean) => {
@@ -2052,7 +2063,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
   // Prevent unauthorized tab access
   useEffect(() => {
     if (isAuthReady && user) {
-      if (activeTab !== 'landing' && !hasPagePermission(currentUserDoc?.role, activeTab)) {
+      if (activeTab !== 'landing' && !canCurrentUserAccessPage(activeTab)) {
         setActiveTab('landing');
       }
     }
@@ -2347,11 +2358,21 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
 
     try {
       // Clean up NaN, undefined, and empty string sizes to prevent Firestore issues
+      const numericKeys = [
+        'totalSft', 'totalPcs', 'diaBariSft', 'diaBariPcs',
+        'bonorupaSft', 'bonorupaPcs', 'bananiSft', 'bananiPcs',
+        'dokhinkhanSft', 'dokhinkhanPcs', 'dokhinkhan', 'bonorupa',
+        'banani', 'qty', 'qtySft', 'qtyPcs', 'quantity', 'unitPrice',
+        'total', 'subTotal', 'discount', 'discountPercent', 'totalAmount',
+        'paidAmount', 'dueAmount'
+      ];
       Object.keys(data).forEach(key => {
         if (data[key] === undefined) {
           delete data[key];
         } else if (typeof data[key] === 'number' && isNaN(data[key])) {
           data[key] = 0;
+        } else if (numericKeys.includes(key) && data[key] === '') {
+          delete data[key];
         }
       });
 
@@ -3051,7 +3072,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
 
   // Redirect unauthorized users from restricted tabs
   useEffect(() => {
-    if (activeTab !== 'landing' && !hasPagePermission(currentUserDoc?.role, activeTab)) {
+    if (activeTab !== 'landing' && !canCurrentUserAccessPage(activeTab)) {
       setActiveTab('landing');
     }
   }, [activeTab, currentUserDoc, rolePermissions]);
@@ -3138,9 +3159,15 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
               const productCode = (product as any)?.code;
 
               const batch = writeBatch(db);
-              const bookedToDelete = bookedItems.filter(b => 
-                (productName && b.name === productName) || (productCode && b.code === productCode)
-              );
+              const bookedToDelete = bookedItems.filter(b => {
+                if (collectionName === 'tiles') {
+                  const productBrand = (product as any)?.brand;
+                  const productSize = (product as any)?.size;
+                  return productName && b.name === productName && b.brand === productBrand && b.size === productSize;
+                } else {
+                  return productCode && b.code === productCode;
+                }
+              });
 
               bookedToDelete.forEach(b => {
                 batch.update(doc(db, 'bookedItems', b.id), { deleted: true });
@@ -3187,12 +3214,19 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
 
           // Sync bookedItems if products are cleared
           if (collectionName === 'tiles' || collectionName === 'goods') {
-            const productNames = snapshot.docs.map(d => (d.data() as any).name).filter(Boolean);
-            const productCodes = snapshot.docs.map(d => (d.data() as any).code).filter(Boolean);
-
-            const bookedToDelete = bookedItems.filter(b => 
-              (b.name && productNames.includes(b.name)) || (b.code && productCodes.includes(b.code))
-            );
+            const bookedToDelete = bookedItems.filter(b => {
+              if (collectionName === 'tiles') {
+                return snapshot.docs.some(doc => {
+                  const d = doc.data() as any;
+                  return b.name === d.name && b.brand === d.brand && b.size === d.size;
+                });
+              } else {
+                return snapshot.docs.some(doc => {
+                  const d = doc.data() as any;
+                  return b.code === d.code;
+                });
+              }
+            });
 
             bookedToDelete.forEach(b => {
               batch.update(doc(db, 'bookedItems', b.id), { deleted: true });
@@ -3258,12 +3292,13 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
           // Sync bookedItems if products are deleted (soft delete only)
           if (collectionName === 'tiles' || collectionName === 'goods') {
             const products = (collectionName === 'tiles' ? tiles : goods).filter(i => selectedIds.includes(i.id));
-            const productNames = products.map(p => (p as any).name).filter(Boolean);
-            const productCodes = products.map(p => (p as any).code).filter(Boolean);
-
-            const bookedToDelete = bookedItems.filter(b => 
-              (b.name && productNames.includes(b.name)) || (b.code && productCodes.includes(b.code))
-            );
+            const bookedToDelete = bookedItems.filter(b => {
+              if (collectionName === 'tiles') {
+                return products.some(p => b.name === (p as any).name && b.brand === (p as any).brand && b.size === (p as any).size);
+              } else {
+                return products.some(p => b.code === (p as any).code);
+              }
+            });
 
             bookedToDelete.forEach(b => {
               batch.update(doc(db, 'bookedItems', b.id), { deleted: true });
@@ -3334,8 +3369,10 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
     
     return combined.map(item => {
       const bookedForThis = bookedItems.filter(b => 
-        (item.type === 'good' && b.code === item.code) || 
-        (item.type === 'tile' && b.name === item.name)
+        !b.deleted && (
+          (item.type === 'good' && b.code === item.code) || 
+          (item.type === 'tile' && b.name === item.name && b.size === item.size && b.brand === item.brand)
+        )
       );
       const bookedSft = bookedForThis.reduce((sum, b) => sum + (b.qtySft || 0), 0);
       const bookedPcs = bookedForThis.reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
@@ -3435,7 +3472,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
     let outOfStockCount = 0;
 
     rawDisplayTiles.forEach(tile => {
-      const currentBookings = bookedItems.filter(b => b.name === tile.name);
+      const currentBookings = bookedItems.filter(b => !b.deleted && b.name === tile.name && b.size === tile.size && b.brand === tile.brand);
       const bookedSft = currentBookings.reduce((sum, b) => sum + (b.qtySft || 0), 0);
       const bookedPcs = currentBookings.reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
       const stockSft = Math.max(0, Math.round((tile.totalSft - bookedSft) * 100) / 100);
@@ -3460,7 +3497,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
     let outOfStockCount = 0;
 
     rawDisplayGoods.forEach(good => {
-      const currentBookings = bookedItems.filter(b => b.code === good.code);
+      const currentBookings = bookedItems.filter(b => !b.deleted && b.code === good.code);
       const bookedPcs = currentBookings.reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
       const totalPcs = Math.round((good.dokhinkhan || 0) + (good.bonorupa || 0) + (good.banani || 0));
       const stockPcs = Math.max(0, Math.round(totalPcs - bookedPcs));
@@ -3498,7 +3535,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
   const displayTiles = useMemo(() => {
     if (showOutOfStockOnly) {
       return rawDisplayTiles.filter(tile => {
-        const currentBookings = bookedItems.filter(b => b.name === tile.name);
+        const currentBookings = bookedItems.filter(b => !b.deleted && b.name === tile.name && b.size === tile.size && b.brand === tile.brand);
         const bookedSft = currentBookings.reduce((sum, b) => sum + (b.qtySft || 0), 0);
         const bookedPcs = currentBookings.reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
         const stockSft = Math.round((tile.totalSft - bookedSft) * 100) / 100;
@@ -3508,7 +3545,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
     }
     if (activeTab === 'stock') {
       return rawDisplayTiles.filter(tile => {
-        const currentBookings = bookedItems.filter(b => b.name === tile.name);
+        const currentBookings = bookedItems.filter(b => !b.deleted && b.name === tile.name && b.size === tile.size && b.brand === tile.brand);
         const bookedSft = currentBookings.reduce((sum, b) => sum + (b.qtySft || 0), 0);
         const bookedPcs = currentBookings.reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
         const stockSft = Math.round((tile.totalSft - bookedSft) * 100) / 100;
@@ -3522,7 +3559,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
   const displayGoods = useMemo(() => {
     if (showOutOfStockOnly) {
       return rawDisplayGoods.filter(good => {
-        const currentBookings = bookedItems.filter(b => b.code === good.code);
+        const currentBookings = bookedItems.filter(b => !b.deleted && b.code === good.code);
         const bookedPcs = currentBookings.reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
         const totalPcs = Math.round((good.dokhinkhan || 0) + (good.bonorupa || 0) + (good.banani || 0));
         const stockPcs = Math.max(0, Math.round(totalPcs - bookedPcs));
@@ -3531,7 +3568,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
     }
     if (activeTab === 'stock') {
       return rawDisplayGoods.filter(good => {
-        const currentBookings = bookedItems.filter(b => b.code === good.code);
+        const currentBookings = bookedItems.filter(b => !b.deleted && b.code === good.code);
         const bookedPcs = currentBookings.reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
         const totalPcs = Math.round((good.dokhinkhan || 0) + (good.bonorupa || 0) + (good.banani || 0));
         const stockPcs = Math.max(0, Math.round(totalPcs - bookedPcs));
@@ -3810,7 +3847,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
             </div>
 
             <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-2">
-              {hasPagePermission(currentUserDoc?.role, 'landing') && (
+              {canCurrentUserAccessPage('landing') && (
                 <button
                   onClick={() => setActiveTab('landing')}
                   className={cn(
@@ -3822,7 +3859,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                 </button>
               )}
 
-              {hasPagePermission(currentUserDoc?.role, 'master') && (
+              {canCurrentUserAccessPage('master') && (
                 <button
                   onClick={() => setActiveTab('master')}
                   className={cn(
@@ -3834,7 +3871,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                 </button>
               )}
 
-              {hasPagePermission(currentUserDoc?.role, 'booked') && (
+              {canCurrentUserAccessPage('booked') && (
                 <button
                   onClick={() => setActiveTab('booked')}
                   className={cn(
@@ -3846,7 +3883,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                 </button>
               )}
 
-              {hasPagePermission(currentUserDoc?.role, 'stock') && (
+              {canCurrentUserAccessPage('stock') && (
                 <button
                   onClick={() => setActiveTab('stock')}
                   className={cn(
@@ -3858,7 +3895,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                 </button>
               )}
 
-              {hasPagePermission(currentUserDoc?.role, 'quote') && (
+              {canCurrentUserAccessPage('quote') && (
                 <button
                   onClick={() => setActiveTab('quote')}
                   className={cn(
@@ -3870,7 +3907,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                 </button>
               )}
 
-              {hasPagePermission(currentUserDoc?.role, 'sales') && (
+              {canCurrentUserAccessPage('sales') && (
                 <button
                   onClick={() => setActiveTab('sales')}
                   className={cn(
@@ -3882,7 +3919,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                 </button>
               )}
 
-              {hasPagePermission(currentUserDoc?.role, 'billing') && (
+              {canCurrentUserAccessPage('billing') && (
                 <button
                   onClick={() => setActiveTab('billing')}
                   className={cn(
@@ -3894,7 +3931,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                 </button>
               )}
 
-              {hasPagePermission(currentUserDoc?.role, 'delivery_approval') && (
+              {canCurrentUserAccessPage('delivery_approval') && (
                 <button
                   onClick={() => setActiveTab('delivery_approval')}
                   className={cn(
@@ -3906,7 +3943,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                 </button>
               )}
 
-              {hasPagePermission(currentUserDoc?.role, 'master_sheet') && (
+              {canCurrentUserAccessPage('master_sheet') && (
                 <button
                   onClick={() => setActiveTab('master_sheet')}
                   className={cn(
@@ -3918,7 +3955,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                 </button>
               )}
 
-              {hasPagePermission(currentUserDoc?.role, 'users') && (
+              {canCurrentUserAccessPage('users') && (
                 <button
                   onClick={() => setActiveTab('users')}
                   className={cn(
@@ -4087,7 +4124,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
               className="md:hidden fixed top-16 left-0 right-0 z-40 border-t border-gray-200 bg-white shadow-xl max-h-[calc(100vh-8rem)] overflow-y-auto"
             >
               <div className="p-4 space-y-2">
-                {hasPagePermission(currentUserDoc?.role, 'landing') && (
+                {canCurrentUserAccessPage('landing') && (
                   <button
                     onClick={() => { setActiveTab('landing'); setIsMenuOpen(false); }}
                     className={cn(
@@ -4098,7 +4135,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     <Home className="w-5 h-5 text-emerald-500" /> Home
                   </button>
                 )}
-                {hasPagePermission(currentUserDoc?.role, 'search') && (
+                {canCurrentUserAccessPage('search') && (
                   <button
                     onClick={() => { setActiveTab('search'); setIsMenuOpen(false); }}
                     className={cn(
@@ -4109,7 +4146,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     <Search className="w-5 h-5 text-sky-500" /> Search
                   </button>
                 )}
-                {hasPagePermission(currentUserDoc?.role, 'master') && (
+                {canCurrentUserAccessPage('master') && (
                   <button
                     onClick={() => { setActiveTab('master'); setIsMenuOpen(false); }}
                     className={cn(
@@ -4120,7 +4157,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     <Grid3X3 className="w-5 h-5 text-blue-500" /> ADD PRODUCT
                   </button>
                 )}
-                {hasPagePermission(currentUserDoc?.role, 'booked') && (
+                {canCurrentUserAccessPage('booked') && (
                   <button
                     onClick={() => { setActiveTab('booked'); setIsMenuOpen(false); }}
                     className={cn(
@@ -4131,7 +4168,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     <FileText className="w-5 h-5 text-amber-500" /> Booked Item
                   </button>
                 )}
-                {hasPagePermission(currentUserDoc?.role, 'stock') && (
+                {canCurrentUserAccessPage('stock') && (
                   <button
                     onClick={() => { setActiveTab('stock'); setIsMenuOpen(false); }}
                     className={cn(
@@ -4142,7 +4179,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     <Database className="w-5 h-5" /> Stock Item
                   </button>
                 )}
-                {hasPagePermission(currentUserDoc?.role, 'quote') && (
+                {canCurrentUserAccessPage('quote') && (
                   <button
                     onClick={() => { setActiveTab('quote'); setIsMenuOpen(false); }}
                     className={cn(
@@ -4153,7 +4190,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     <Calculator className="w-5 h-5" /> Make Quote
                   </button>
                 )}
-                {hasPagePermission(currentUserDoc?.role, 'sales') && (
+                {canCurrentUserAccessPage('sales') && (
                   <button
                     onClick={() => { setActiveTab('sales'); setIsMenuOpen(false); }}
                     className={cn(
@@ -4164,7 +4201,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     <FileText className="w-5 h-5" /> Sales / Invoice
                   </button>
                 )}
-                {hasPagePermission(currentUserDoc?.role, 'billing') && (
+                {canCurrentUserAccessPage('billing') && (
                   <button
                     onClick={() => { setActiveTab('billing'); setIsMenuOpen(false); }}
                     className={cn(
@@ -4175,7 +4212,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     <FileText className="w-5 h-5" /> Billing / Quotation
                   </button>
                 )}
-                {hasPagePermission(currentUserDoc?.role, 'delivery_approval') && (
+                {canCurrentUserAccessPage('delivery_approval') && (
                   <button
                     onClick={() => { setActiveTab('delivery_approval'); setIsMenuOpen(false); }}
                     className={cn(
@@ -4186,7 +4223,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     <Truck className="w-5 h-5" /> Delivery Approval
                   </button>
                 )}
-                {hasPagePermission(currentUserDoc?.role, 'master_sheet') && (
+                {canCurrentUserAccessPage('master_sheet') && (
                   <button
                     onClick={() => { setActiveTab('master_sheet'); setIsMenuOpen(false); }}
                     className={cn(
@@ -4197,7 +4234,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     <Database className="w-5 h-5" /> Master Sheet
                   </button>
                 )}
-                {hasPagePermission(currentUserDoc?.role, 'users') && (
+                {canCurrentUserAccessPage('users') && (
                   <button
                     onClick={() => { setActiveTab('users'); setIsMenuOpen(false); }}
                     className={cn(
@@ -4684,7 +4721,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                 <p className="text-slate-600 font-medium max-w-sm">No items match your search for "{searchQuery}". Try a different product name, brand or code.</p>
               </div>
             )}
-            {((activeTab === 'master' || activeTab === 'master_sheet') && isAdmin) && (
+            {((activeTab === 'master' || activeTab === 'master_sheet') && canCurrentUserAccessPage(activeTab)) && (
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-2 mb-4">
               <div className="flex flex-wrap gap-2 p-1 bg-gray-100 rounded-xl w-fit">
                 <button
@@ -4744,7 +4781,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
           )}
 
           {/* User Management Section */}
-          {activeTab === 'users' && isSupremeAdmin && (
+          {activeTab === 'users' && canCurrentUserAccessPage('users') && (
             <section className="space-y-12">
               <div className="flex items-center justify-between">
                 <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
@@ -5291,7 +5328,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
           )}
 
           {/* Tiles Section */}
-          {(((activeTab === 'master' || activeTab === 'master_sheet') && isAdmin && masterSubTab === 'tiles') || (activeTab === 'stock' && stockSubTab === 'tiles') || ((activeTab === 'search' || showSearchBox) && searchQuery.trim() !== '' && filteredTiles.length > 0)) && (
+          {(((activeTab === 'master' || activeTab === 'master_sheet') && canCurrentUserAccessPage(activeTab) && masterSubTab === 'tiles') || (activeTab === 'stock' && stockSubTab === 'tiles') || ((activeTab === 'search' || showSearchBox) && searchQuery.trim() !== '' && filteredTiles.length > 0)) && (
             <section className="space-y-4">
               <div className={cn(
                 "flex items-center justify-between",
@@ -5468,7 +5505,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   <tbody>
                     {displayTiles.map((tile, index) => {
                       const isEditing = editingId === tile.id;
-                      const currentBookings = bookedItems.filter(b => b.name === tile.name);
+                      const currentBookings = bookedItems.filter(b => !b.deleted && b.name === tile.name && b.size === tile.size && b.brand === tile.brand);
                       const bookedSft = currentBookings.reduce((sum, b) => sum + (b.qtySft || 0), 0);
                       const bookedPcs = currentBookings.reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
                       const stockSft = Math.round((tile.totalSft - bookedSft) * 100) / 100;
@@ -5745,7 +5782,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
           )}
 
           {/* Goods Section */}
-          {(((activeTab === 'master' || activeTab === 'master_sheet') && isAdmin && masterSubTab === 'goods') || (activeTab === 'stock' && stockSubTab === 'goods') || ((activeTab === 'search' || showSearchBox) && searchQuery.trim() !== '' && filteredGoods.length > 0)) && (
+          {(((activeTab === 'master' || activeTab === 'master_sheet') && canCurrentUserAccessPage(activeTab) && masterSubTab === 'goods') || (activeTab === 'stock' && stockSubTab === 'goods') || ((activeTab === 'search' || showSearchBox) && searchQuery.trim() !== '' && filteredGoods.length > 0)) && (
             <section className="space-y-4">
               <div className={cn(
                 "flex items-center justify-between",
@@ -5901,7 +5938,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   <tbody>
                     {displayGoods.map((good, index) => {
                       const isEditing = editingId === good.id;
-                      const currentBookings = bookedItems.filter(b => b.code === good.code);
+                      const currentBookings = bookedItems.filter(b => !b.deleted && b.code === good.code);
                       const bookedPcs = currentBookings.reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
                       const totalPcs = Math.round((good.dokhinkhan || 0) + (good.bonorupa || 0) + (good.banani || 0));
                       const stockPcs = Math.round(totalPcs - bookedPcs);
@@ -6128,7 +6165,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
           )}
 
           {/* Tools Section */}
-          {(((activeTab === 'master' || activeTab === 'master_sheet') && isAdmin && masterSubTab === 'tools') || ((activeTab === 'search' || showSearchBox) && searchQuery.trim() !== '' && filteredTools.length > 0)) && (
+          {(((activeTab === 'master' || activeTab === 'master_sheet') && canCurrentUserAccessPage(activeTab) && masterSubTab === 'tools') || ((activeTab === 'search' || showSearchBox) && searchQuery.trim() !== '' && filteredTools.length > 0)) && (
             <section className="space-y-4">
               <div className="flex items-center justify-between">
                 <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
@@ -6464,7 +6501,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
           )}
 
           {/* Booked Items Section */}
-          {(activeTab === 'booked' || (activeTab !== 'master' && activeTab !== 'master_sheet' && (activeTab === 'search' || showSearchBox) && searchQuery.trim() !== '' && isFullyApproved && bookedItems.filter(b => {
+          {((activeTab === 'booked' && canCurrentUserAccessPage('booked')) || (activeTab !== 'master' && activeTab !== 'master_sheet' && (activeTab === 'search' || showSearchBox) && searchQuery.trim() !== '' && isFullyApproved && bookedItems.filter(b => {
               if (b.deleted) return false;
               const matchesSearch = ((b.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || (b.code || '').toLowerCase().includes(searchQuery.toLowerCase()));
               const matchesMarketing = marketingFilter === 'all' ? true : b.marketingPerson === marketingFilter;
@@ -6873,7 +6910,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
             </div>
           )}
 
-          {activeTab === 'quote' && (
+          {activeTab === 'quote' && canCurrentUserAccessPage('quote') && (
             <section className="space-y-6">
               <div className="flex border-b border-gray-200">
                 <button
@@ -7682,7 +7719,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
         </section>
         )}
 
-        {activeTab === 'sales' && (
+        {activeTab === 'sales' && canCurrentUserAccessPage('sales') && (
           <SalesManager
             user={user}
             isAdmin={isAdmin}
@@ -7695,7 +7732,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
           />
         )}
 
-        {activeTab === 'billing' && canSeeBilling && (
+        {activeTab === 'billing' && canCurrentUserAccessPage('billing') && (
           <div className="w-full">
             <BillingManager 
               user={user} 
@@ -7705,7 +7742,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
           </div>
         )}
 
-        {activeTab === 'delivery_approval' && (
+        {activeTab === 'delivery_approval' && canCurrentUserAccessPage('delivery_approval') && (
           <div className="w-full">
             <DeliveryApprovalManager
               user={user}
@@ -7931,6 +7968,8 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                       if (numericKeys.includes(key)) {
                         if (typeof val === 'string' && val !== '' && !isNaN(Number(val))) {
                           data[key] = Number(val);
+                        } else if (val === '') {
+                          delete data[key];
                         }
                       }
                     });

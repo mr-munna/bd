@@ -135,8 +135,8 @@ service cloud.firestore {
              data.name is string && data.name.size() <= 200 &&
              data.code is string && data.code.size() <= 100 &&
              data.clientName is string && data.clientName.size() <= 100 &&
-             (!('qtySft' in data) || data.qtySft == null || data.qtySft is number) &&
-             (!('qtyPcs' in data) || data.qtyPcs == null || data.qtyPcs is number);
+             (!('qtySft' in data) || data.qtySft == null || data.qtySft == "" || data.qtySft is number) &&
+             (!('qtyPcs' in data) || data.qtyPcs == null || data.qtyPcs == "" || data.qtyPcs is number);
     }
 
     function isValidSale(data) {
