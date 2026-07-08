@@ -2153,16 +2153,52 @@ Inventory Management System`;
                           </div>
                         )}
 
-                        {/* Edit Button (Visible when NOT approved) */}
-                        {item.status !== 'approved' && (
-                          <button
-                            onClick={() => handleEditChallan(item)}
-                            className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-md transition-colors"
-                            title="Edit / Modify Delivery Request"
-                          >
-                            <Pen className="w-3.5 h-3.5" /> Edit Request
-                          </button>
-                        )}
+                        {/* Edit Button (Conditional approval/rejection visibility rules) */}
+                        {(() => {
+                          const isUserAdmin = isAdmin || isSuperAdmin || isSupremeAdmin;
+
+                          // Check who approved and rejected
+                          const isSupremeApproved = item.supremeApproved === true;
+                          const isSuperApproved = item.superApproved === true;
+                          const isSupremeRejected = !!(item.supremeApprovedBy && item.supremeApprovedBy.toLowerCase().includes('(rejected)'));
+                          const isSuperRejected = !!(item.superApprovedBy && item.superApprovedBy.toLowerCase().includes('(rejected)'));
+
+                          // 1. If one rejected and one approved, edit option will not appear
+                          const oneApprovedOneRejected = (isSupremeApproved && isSuperRejected) || (isSuperApproved && isSupremeRejected);
+                          if (oneApprovedOneRejected) return null;
+
+                          // 2. If 2 people (both Supreme and Super admins) reject, edit option will appear for admin
+                          const bothRejected = isSupremeRejected && isSuperRejected;
+                          if (bothRejected) {
+                            if (isUserAdmin) {
+                              return (
+                                <button
+                                  onClick={() => handleEditChallan(item)}
+                                  className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-md transition-colors"
+                                  title="Edit / Modify Delivery Request"
+                                >
+                                  <Pen className="w-3.5 h-3.5" /> Edit Request
+                                </button>
+                              );
+                            }
+                            return null;
+                          }
+
+                          // 3. If completely approved or cleared, edit option is disabled
+                          const isApproved = item.status === 'approved' || isSupremeApproved || isSuperApproved;
+                          if (isApproved) return null;
+
+                          // 4. Otherwise, if it is still completely pending, allow editing
+                          return (
+                            <button
+                              onClick={() => handleEditChallan(item)}
+                              className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-md transition-colors"
+                              title="Edit / Modify Delivery Request"
+                            >
+                              <Pen className="w-3.5 h-3.5" /> Edit Request
+                            </button>
+                          );
+                        })()}
 
                          {/* Print / Download Buttons (Only visible when fully cleared) */}
                         {canPrint && (

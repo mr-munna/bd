@@ -58,6 +58,7 @@ export interface BookedItem {
   marketingPerson: string;
   remark: string;
   imageUrl: string;
+  warehouse?: string;
 }
 
 export type Category = 'tiles' | 'goods' | 'tools' | 'bookedItems';

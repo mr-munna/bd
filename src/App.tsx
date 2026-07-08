@@ -334,6 +334,44 @@ const Input = ({
   </div>
 );
 
+const Select = ({
+  label,
+  value,
+  defaultValue,
+  onChange,
+  className,
+  required,
+  name,
+  options
+}: {
+  label?: string;
+  value?: string;
+  defaultValue?: string;
+  onChange?: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+  className?: string;
+  required?: boolean;
+  name?: string;
+  options: { value: string; label: string }[];
+}) => (
+  <div className={cn('flex flex-col gap-1.5', className)}>
+    {label && <label className="text-sm font-medium text-gray-700">{label}</label>}
+    <select
+      name={name}
+      value={value}
+      defaultValue={defaultValue}
+      onChange={onChange}
+      required={required}
+      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white"
+    >
+      {options.map((opt, i) => (
+        <option key={i} value={opt.value}>
+          {opt.label}
+        </option>
+      ))}
+    </select>
+  </div>
+);
+
 const TableHeader = ({ children, className, align = 'left' }: { children: React.ReactNode; className?: string; align?: 'left' | 'center' | 'right' }) => (
   <th className={cn(
     "px-4 py-3 text-sm font-normal text-gray-900 uppercase bg-slate-200 border-b-2 border-slate-400 sticky top-0 z-10",
@@ -3370,8 +3408,8 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
     return combined.map(item => {
       const bookedForThis = bookedItems.filter(b => 
         !b.deleted && (
-          (item.type === 'good' && b.code === item.code) || 
-          (item.type === 'tile' && b.name === item.name && b.size === item.size && b.brand === item.brand)
+          (item.type === 'good' && b.code && item.code && b.code.trim().toLowerCase() === item.code.trim().toLowerCase()) || 
+          (item.type === 'tile' && b.name && item.name && b.name.trim().toLowerCase() === item.name.trim().toLowerCase() && (b.size || '').trim().toLowerCase() === (item.size || '').trim().toLowerCase() && (b.brand || '').trim().toLowerCase() === (item.brand || '').trim().toLowerCase())
         )
       );
       const bookedSft = bookedForThis.reduce((sum, b) => sum + (b.qtySft || 0), 0);
@@ -3472,7 +3510,13 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
     let outOfStockCount = 0;
 
     rawDisplayTiles.forEach(tile => {
-      const currentBookings = bookedItems.filter(b => !b.deleted && b.name === tile.name && b.size === tile.size && b.brand === tile.brand);
+      const currentBookings = bookedItems.filter(b => 
+        !b.deleted && 
+        b.name && tile.name && 
+        b.name.trim().toLowerCase() === tile.name.trim().toLowerCase() && 
+        (b.size || '').trim().toLowerCase() === (tile.size || '').trim().toLowerCase() && 
+        (b.brand || '').trim().toLowerCase() === (tile.brand || '').trim().toLowerCase()
+      );
       const bookedSft = currentBookings.reduce((sum, b) => sum + (b.qtySft || 0), 0);
       const bookedPcs = currentBookings.reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
       const stockSft = Math.max(0, Math.round((tile.totalSft - bookedSft) * 100) / 100);
@@ -3497,7 +3541,11 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
     let outOfStockCount = 0;
 
     rawDisplayGoods.forEach(good => {
-      const currentBookings = bookedItems.filter(b => !b.deleted && b.code === good.code);
+      const currentBookings = bookedItems.filter(b => 
+        !b.deleted && 
+        b.code && good.code && 
+        b.code.trim().toLowerCase() === good.code.trim().toLowerCase()
+      );
       const bookedPcs = currentBookings.reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
       const totalPcs = Math.round((good.dokhinkhan || 0) + (good.bonorupa || 0) + (good.banani || 0));
       const stockPcs = Math.max(0, Math.round(totalPcs - bookedPcs));
@@ -3535,7 +3583,13 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
   const displayTiles = useMemo(() => {
     if (showOutOfStockOnly) {
       return rawDisplayTiles.filter(tile => {
-        const currentBookings = bookedItems.filter(b => !b.deleted && b.name === tile.name && b.size === tile.size && b.brand === tile.brand);
+        const currentBookings = bookedItems.filter(b => 
+          !b.deleted && 
+          b.name && tile.name && 
+          b.name.trim().toLowerCase() === tile.name.trim().toLowerCase() && 
+          (b.size || '').trim().toLowerCase() === (tile.size || '').trim().toLowerCase() && 
+          (b.brand || '').trim().toLowerCase() === (tile.brand || '').trim().toLowerCase()
+        );
         const bookedSft = currentBookings.reduce((sum, b) => sum + (b.qtySft || 0), 0);
         const bookedPcs = currentBookings.reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
         const stockSft = Math.round((tile.totalSft - bookedSft) * 100) / 100;
@@ -3545,7 +3599,13 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
     }
     if (activeTab === 'stock') {
       return rawDisplayTiles.filter(tile => {
-        const currentBookings = bookedItems.filter(b => !b.deleted && b.name === tile.name && b.size === tile.size && b.brand === tile.brand);
+        const currentBookings = bookedItems.filter(b => 
+          !b.deleted && 
+          b.name && tile.name && 
+          b.name.trim().toLowerCase() === tile.name.trim().toLowerCase() && 
+          (b.size || '').trim().toLowerCase() === (tile.size || '').trim().toLowerCase() && 
+          (b.brand || '').trim().toLowerCase() === (tile.brand || '').trim().toLowerCase()
+        );
         const bookedSft = currentBookings.reduce((sum, b) => sum + (b.qtySft || 0), 0);
         const bookedPcs = currentBookings.reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
         const stockSft = Math.round((tile.totalSft - bookedSft) * 100) / 100;
@@ -3559,7 +3619,11 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
   const displayGoods = useMemo(() => {
     if (showOutOfStockOnly) {
       return rawDisplayGoods.filter(good => {
-        const currentBookings = bookedItems.filter(b => !b.deleted && b.code === good.code);
+        const currentBookings = bookedItems.filter(b => 
+          !b.deleted && 
+          b.code && good.code && 
+          b.code.trim().toLowerCase() === good.code.trim().toLowerCase()
+        );
         const bookedPcs = currentBookings.reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
         const totalPcs = Math.round((good.dokhinkhan || 0) + (good.bonorupa || 0) + (good.banani || 0));
         const stockPcs = Math.max(0, Math.round(totalPcs - bookedPcs));
@@ -3568,7 +3632,11 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
     }
     if (activeTab === 'stock') {
       return rawDisplayGoods.filter(good => {
-        const currentBookings = bookedItems.filter(b => !b.deleted && b.code === good.code);
+        const currentBookings = bookedItems.filter(b => 
+          !b.deleted && 
+          b.code && good.code && 
+          b.code.trim().toLowerCase() === good.code.trim().toLowerCase()
+        );
         const bookedPcs = currentBookings.reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
         const totalPcs = Math.round((good.dokhinkhan || 0) + (good.bonorupa || 0) + (good.banani || 0));
         const stockPcs = Math.max(0, Math.round(totalPcs - bookedPcs));
@@ -5505,12 +5573,45 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   <tbody>
                     {displayTiles.map((tile, index) => {
                       const isEditing = editingId === tile.id;
-                      const currentBookings = bookedItems.filter(b => !b.deleted && b.name === tile.name && b.size === tile.size && b.brand === tile.brand);
+                      const currentBookings = bookedItems.filter(b => 
+                        !b.deleted && 
+                        b.name && tile.name && 
+                        b.name.trim().toLowerCase() === tile.name.trim().toLowerCase() && 
+                        (b.size || '').trim().toLowerCase() === (tile.size || '').trim().toLowerCase() && 
+                        (b.brand || '').trim().toLowerCase() === (tile.brand || '').trim().toLowerCase()
+                      );
                       const bookedSft = currentBookings.reduce((sum, b) => sum + (b.qtySft || 0), 0);
                       const bookedPcs = currentBookings.reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
                       const stockSft = Math.round((tile.totalSft - bookedSft) * 100) / 100;
                       const stockPcs = Math.round(tile.totalPcs - bookedPcs);
                       const isOutOfStock = stockSft <= 0 || stockPcs <= 0;
+
+                      // Warehouse-specific booked quantities
+                      const diaBariBookedSft = currentBookings.filter(b => b.warehouse === 'diaBari' || !b.warehouse).reduce((sum, b) => sum + (b.qtySft || 0), 0);
+                      const diaBariBookedPcs = currentBookings.filter(b => b.warehouse === 'diaBari' || !b.warehouse).reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
+
+                      const bonorupaBookedSft = currentBookings.filter(b => b.warehouse === 'bonorupa').reduce((sum, b) => sum + (b.qtySft || 0), 0);
+                      const bonorupaBookedPcs = currentBookings.filter(b => b.warehouse === 'bonorupa').reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
+
+                      const bananiBookedSft = currentBookings.filter(b => b.warehouse === 'banani').reduce((sum, b) => sum + (b.qtySft || 0), 0);
+                      const bananiBookedPcs = currentBookings.filter(b => b.warehouse === 'banani').reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
+
+                      const dokhinkhanBookedSft = currentBookings.filter(b => b.warehouse === 'dokhinkhan').reduce((sum, b) => sum + (b.qtySft || 0), 0);
+                      const dokhinkhanBookedPcs = currentBookings.filter(b => b.warehouse === 'dokhinkhan').reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
+
+                      // Warehouse-specific available stocks
+                      const availDiaBariSft = Math.max(0, (tile.diaBariSft || 0) - diaBariBookedSft);
+                      const availDiaBariPcs = Math.max(0, (tile.diaBariPcs || 0) - diaBariBookedPcs);
+
+                      const availBonorupaSft = Math.max(0, (tile.bonorupaSft || 0) - bonorupaBookedSft);
+                      const availBonorupaPcs = Math.max(0, (tile.bonorupaPcs || 0) - bonorupaBookedPcs);
+
+                      const availBananiSft = Math.max(0, (tile.bananiSft || 0) - bananiBookedSft);
+                      const availBananiPcs = Math.max(0, (tile.bananiPcs || 0) - bananiBookedPcs);
+
+                      const availDokhinkhanSft = Math.max(0, (tile.dokhinkhanSft || 0) - dokhinkhanBookedSft);
+                      const availDokhinkhanPcs = Math.max(0, (tile.dokhinkhanPcs || 0) - dokhinkhanBookedPcs);
+
                       const getCellColor = (val: number) => {
                          if (Number(val.toFixed(2)) <= 0) return 'text-red-700 font-black';
                          return activeTab === 'search' ? 'text-blue-800 font-black' : 'text-[#4285F4]';
@@ -5625,14 +5726,14 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                               />
                             ) : tile.brand}
                           </TableCell>
-                          <TableCell align="center" className={cn("font-semibold border-slate-300", isOutOfStock ? "text-red-950" : "!bg-blue-50/50 " + getCellColor(tile.totalSft))}>
-                            {isOutOfStock ? 0 : Number((tile.totalSft || 0).toFixed(2))}
+                          <TableCell align="center" className={cn("font-semibold border-slate-300", isOutOfStock ? "text-red-950" : "!bg-blue-50/50 " + getCellColor(stockSft))}>
+                            {isOutOfStock ? 0 : Number((stockSft || 0).toFixed(2))}
                           </TableCell>
-                          <TableCell align="center" className={cn("font-semibold border-slate-300", isOutOfStock ? "text-red-950" : "!bg-blue-50/50 " + getCellColor(tile.totalPcs))}>
-                            {isOutOfStock ? 0 : Math.round(tile.totalPcs || 0)}
+                          <TableCell align="center" className={cn("font-semibold border-slate-300", isOutOfStock ? "text-red-950" : "!bg-blue-50/50 " + getCellColor(stockPcs))}>
+                            {isOutOfStock ? 0 : Math.round(stockPcs || 0)}
                           </TableCell>
-                          <TableCell align="center" className={cn("border-slate-300", isOutOfStock ? "text-red-950" : getCellColor(tile.diaBariSft))}>{Number((tile.diaBariSft || 0).toFixed(2))}</TableCell>
-                          <TableCell align="center" className={cn("border-slate-300", isOutOfStock ? "text-red-950" : getCellColor(tile.diaBariPcs))}>
+                          <TableCell align="center" className={cn("border-slate-300", isOutOfStock ? "text-red-950" : getCellColor(availDiaBariSft))}>{Number((availDiaBariSft || 0).toFixed(2))}</TableCell>
+                          <TableCell align="center" className={cn("border-slate-300", isOutOfStock ? "text-red-950" : getCellColor(availDiaBariPcs))}>
                             {isEditing ? (
                               <input 
                                 type="number"
@@ -5640,7 +5741,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                                 value={editData.diaBariPcs} 
                                 onChange={e => setEditData({ ...editData, diaBariPcs: Number(e.target.value) || 0 })}
                               />
-                            ) : Math.round(tile.diaBariPcs || 0)}
+                            ) : Math.round(availDiaBariPcs || 0)}
                           </TableCell>
                           <TableCell className={cn("text-xs border-slate-300", isOutOfStock ? "text-red-950/80 font-medium" : "text-gray-500 italic")}>
                             {isEditing ? (
@@ -5652,8 +5753,8 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                               />
                             ) : tile.diaBariRemark}
                           </TableCell>
-                          <TableCell align="center" className={cn("border-slate-300", isOutOfStock ? "text-red-950 font-semibold" : getCellColor(tile.bonorupaSft))}>{Number((tile.bonorupaSft || 0).toFixed(2))}</TableCell>
-                          <TableCell align="center" className={cn("border-slate-300", isOutOfStock ? "text-red-950 font-semibold" : getCellColor(tile.bonorupaPcs))}>
+                          <TableCell align="center" className={cn("border-slate-300", isOutOfStock ? "text-red-950 font-semibold" : getCellColor(availBonorupaSft))}>{Number((availBonorupaSft || 0).toFixed(2))}</TableCell>
+                          <TableCell align="center" className={cn("border-slate-300", isOutOfStock ? "text-red-950 font-semibold" : getCellColor(availBonorupaPcs))}>
                             {isEditing ? (
                               <input 
                                 type="number"
@@ -5661,7 +5762,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                                 value={editData.bonorupaPcs} 
                                 onChange={e => setEditData({ ...editData, bonorupaPcs: Number(e.target.value) || 0 })}
                               />
-                            ) : Math.round(tile.bonorupaPcs || 0)}
+                            ) : Math.round(availBonorupaPcs || 0)}
                           </TableCell>
                           <TableCell className={cn("text-xs border-slate-300", isOutOfStock ? "text-red-950/80 font-medium" : "text-gray-800 font-normal italic")}>
                             {isEditing ? (
@@ -5673,8 +5774,8 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                               />
                             ) : tile.bonorupaRemark}
                           </TableCell>
-                          <TableCell align="center" className={cn("border-slate-300", isOutOfStock ? "text-red-950 font-semibold" : getCellColor(tile.bananiSft))}>{Number((tile.bananiSft || 0).toFixed(2))}</TableCell>
-                          <TableCell align="center" className={cn("border-slate-300", isOutOfStock ? "text-red-950 font-semibold" : getCellColor(tile.bananiPcs))}>
+                          <TableCell align="center" className={cn("border-slate-300", isOutOfStock ? "text-red-950 font-semibold" : getCellColor(availBananiSft))}>{Number((availBananiSft || 0).toFixed(2))}</TableCell>
+                          <TableCell align="center" className={cn("border-slate-300", isOutOfStock ? "text-red-950 font-semibold" : getCellColor(availBananiPcs))}>
                             {isEditing ? (
                               <input 
                                 type="number"
@@ -5682,7 +5783,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                                 value={editData.bananiPcs} 
                                 onChange={e => setEditData({ ...editData, bananiPcs: Number(e.target.value) || 0 })}
                               />
-                            ) : Math.round(tile.bananiPcs || 0)}
+                            ) : Math.round(availBananiPcs || 0)}
                           </TableCell>
                           <TableCell className={cn("text-xs border-slate-300", isOutOfStock ? "text-red-950/80 font-medium" : "text-gray-800 font-normal italic")}>
                             {isEditing ? (
@@ -5694,8 +5795,8 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                               />
                             ) : tile.bananiRemark}
                           </TableCell>
-                          <TableCell align="center" className={cn("border-slate-300", isOutOfStock ? "text-red-950 font-semibold" : getCellColor(tile.dokhinkhanSft || 0))}>{Number((tile.dokhinkhanSft || 0).toFixed(2))}</TableCell>
-                          <TableCell align="center" className={cn("border-slate-300", isOutOfStock ? "text-red-950 font-semibold" : getCellColor(tile.dokhinkhanPcs || 0))}>
+                          <TableCell align="center" className={cn("border-slate-300", isOutOfStock ? "text-red-950 font-semibold" : getCellColor(availDokhinkhanSft))}>{Number((availDokhinkhanSft || 0).toFixed(2))}</TableCell>
+                          <TableCell align="center" className={cn("border-slate-300", isOutOfStock ? "text-red-950 font-semibold" : getCellColor(availDokhinkhanPcs))}>
                             {isEditing ? (
                               <input 
                                 type="number"
@@ -5703,7 +5804,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                                 value={editData.dokhinkhanPcs || 0} 
                                 onChange={e => setEditData({ ...editData, dokhinkhanPcs: Number(e.target.value) || 0 })}
                               />
-                            ) : Math.round(tile.dokhinkhanPcs || 0)}
+                            ) : Math.round(availDokhinkhanPcs || 0)}
                           </TableCell>
                           <TableCell className={cn("text-xs border-slate-300", isOutOfStock ? "text-red-950/80 font-medium" : "text-gray-800 font-normal italic")}>
                             {isEditing ? (
@@ -5938,7 +6039,11 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   <tbody>
                     {displayGoods.map((good, index) => {
                       const isEditing = editingId === good.id;
-                      const currentBookings = bookedItems.filter(b => !b.deleted && b.code === good.code);
+                      const currentBookings = bookedItems.filter(b => 
+                        !b.deleted && 
+                        b.code && good.code && 
+                        b.code.trim().toLowerCase() === good.code.trim().toLowerCase()
+                      );
                       const bookedPcs = currentBookings.reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
                       const totalPcs = Math.round((good.dokhinkhan || 0) + (good.bonorupa || 0) + (good.banani || 0));
                       const stockPcs = Math.round(totalPcs - bookedPcs);
@@ -6055,8 +6160,8 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                               />
                             ) : good.description}
                           </TableCell>
-                          <TableCell align="center" className={cn("font-semibold border-slate-300", isOutOfStock ? "text-red-950 font-bold" : "!bg-blue-50/50 " + getCellColor(totalPcs))}>
-                            {isOutOfStock ? 0 : (totalPcs || 0)}
+                          <TableCell align="center" className={cn("font-semibold border-slate-300", isOutOfStock ? "text-red-950 font-bold" : "!bg-blue-50/50 " + getCellColor(stockPcs))}>
+                            {isOutOfStock ? 0 : (stockPcs || 0)}
                           </TableCell>
                           <TableCell align="center" className={cn("border-slate-300 font-normal", isOutOfStock ? "text-red-950 font-semibold" : getCellColor(good.dokhinkhan))}>
                             {isEditing ? (
@@ -6607,6 +6712,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                       <TableHeader>Client Name</TableHeader>
                       <TableHeader>Marketing Person</TableHeader>
                       <TableHeader>Remark</TableHeader>
+                      <TableHeader align="center">Warehouse</TableHeader>
                       {isAdmin && (!!highlightedRow || editingId !== null) && <TableHeader>Action</TableHeader>}
                     </tr>
                   </thead>
@@ -6804,6 +6910,34 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                                 onChange={e => setEditData({ ...editData, remark: e.target.value })}
                               />
                             ) : item.remark}
+                          </TableCell>
+                          <TableCell align="center">
+                            {isEditing ? (
+                              <Select 
+                                name="warehouse" 
+                                value={editData.warehouse || (((item.size && item.size !== 'N/A' && item.size !== '') || (editData.size && editData.size !== 'N/A' && editData.size !== '')) ? 'diaBari' : 'dokhinkhan')}
+                                options={((item.size && item.size !== 'N/A' && item.size !== '') || (editData.size && editData.size !== 'N/A' && editData.size !== '')) ? [
+                                  { value: 'diaBari', label: 'Diabari' },
+                                  { value: 'bonorupa', label: 'Bonorupa' },
+                                  { value: 'banani', label: 'Banani' },
+                                  { value: 'dokhinkhan', label: 'Dokhinkhan' }
+                                ] : [
+                                  { value: 'dokhinkhan', label: 'Bonorupa 2' },
+                                  { value: 'banani', label: 'Banani' }
+                                ]}
+                                onChange={e => setEditData({ ...editData, warehouse: e.target.value })}
+                              />
+                            ) : (() => {
+                              const w = item.warehouse;
+                              if (!w) return <span className="text-gray-400 italic text-[11px]">Auto/Default</span>;
+                              const labelMap: Record<string, string> = {
+                                diaBari: 'Diabari',
+                                bonorupa: 'Bonorupa',
+                                banani: 'Banani',
+                                dokhinkhan: ((item.size && item.size !== 'N/A' && item.size !== '') ? 'Dokhinkhan' : 'Bonorupa 2')
+                              };
+                              return <span className="px-2 py-1 rounded bg-slate-100 text-[11px] font-semibold text-slate-700">{labelMap[w] || w}</span>;
+                            })()}
                           </TableCell>
                           {isAdmin && (highlightedRow === item.id || editingId === item.id) && (
                             <TableCell>
@@ -8298,6 +8432,29 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                           />
                           <Input label="Client Name" name="clientName" defaultValue={editingItem?.item.clientName} list="uniqueClientNames" options={uniqueClientNames} />
                           <Input label="Marketing Person" name="marketingPerson" defaultValue={editingItem?.item.marketingPerson} list="uniqueMarketingPersons" options={uniqueMarketingPersons} />
+                          {(() => {
+                            const isTileBooking = selectedItemToBook 
+                              ? selectedItemToBook.type === 'tile'
+                              : (editingItem?.item 
+                                  ? (!!editingItem.item.size && editingItem.item.size !== 'N/A' && editingItem.item.size !== '')
+                                  : false);
+                            return (
+                              <Select 
+                                label="Warehouse / Location" 
+                                name="warehouse" 
+                                defaultValue={editingItem?.item.warehouse || (isTileBooking ? 'diaBari' : 'dokhinkhan')}
+                                options={isTileBooking ? [
+                                  { value: 'diaBari', label: 'Diabari' },
+                                  { value: 'bonorupa', label: 'Bonorupa' },
+                                  { value: 'banani', label: 'Banani' },
+                                  { value: 'dokhinkhan', label: 'Dokhinkhan' }
+                                ] : [
+                                  { value: 'dokhinkhan', label: 'Bonorupa 2' },
+                                  { value: 'banani', label: 'Banani' }
+                                ]}
+                              />
+                            );
+                          })()}
                           <Input label="Remark" name="remark" defaultValue={editingItem?.item.remark} className="sm:col-span-2" />
                           
                           {!selectedItemToBook && editingItem && (
