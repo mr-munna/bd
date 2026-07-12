@@ -6048,6 +6048,17 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                       const totalPcs = Math.round((good.dokhinkhan || 0) + (good.bonorupa || 0) + (good.banani || 0));
                       const stockPcs = Math.round(totalPcs - bookedPcs);
                       const isOutOfStock = stockPcs <= 0;
+
+                      // Warehouse-specific booked quantities for goods
+                      const dokhinkhanBookedPcs = currentBookings.filter(b => b.warehouse === 'dokhinkhan' || !b.warehouse).reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
+                      const bananiBookedPcs = currentBookings.filter(b => b.warehouse === 'banani').reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
+                      const bonorupaBookedPcs = currentBookings.filter(b => b.warehouse === 'bonorupa').reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
+
+                      // Warehouse-specific available stocks for goods
+                      const availDokhinkhan = Math.max(0, Math.round((good.dokhinkhan || 0) - dokhinkhanBookedPcs));
+                      const availBanani = Math.max(0, Math.round((good.banani || 0) - bananiBookedPcs));
+                      const availBonorupa = Math.max(0, Math.round((good.bonorupa || 0) - bonorupaBookedPcs));
+
                       const getCellColor = (val: number) => {
                         if (Math.round(val) <= 0) return 'text-red-700 font-black';
                         return activeTab === 'search' ? 'text-blue-800 font-black' : 'text-[#4285F4]';
@@ -6163,7 +6174,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                           <TableCell align="center" className={cn("font-semibold border-slate-300", isOutOfStock ? "text-red-950 font-bold" : "!bg-blue-50/50 " + getCellColor(stockPcs))}>
                             {isOutOfStock ? 0 : (stockPcs || 0)}
                           </TableCell>
-                          <TableCell align="center" className={cn("border-slate-300 font-normal", isOutOfStock ? "text-red-950 font-semibold" : getCellColor(good.dokhinkhan))}>
+                          <TableCell align="center" className={cn("border-slate-300 font-normal", isOutOfStock ? "text-red-950 font-semibold" : getCellColor(availDokhinkhan))}>
                             {isEditing ? (
                               <input 
                                 type="number"
@@ -6171,7 +6182,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                                 value={editData.dokhinkhan || 0} 
                                 onChange={e => setEditData({ ...editData, dokhinkhan: Number(e.target.value) || 0 })}
                               />
-                            ) : Math.round(good.dokhinkhan || 0)}
+                            ) : Math.round(availDokhinkhan || 0)}
                           </TableCell>
                           <TableCell className={cn("text-xs border-slate-300", isOutOfStock ? "text-red-950/80 font-medium" : "text-gray-500 italic")}>
                             {isEditing ? (
@@ -6183,7 +6194,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                               />
                             ) : good.dokhinkhanRemark}
                           </TableCell>
-                          <TableCell align="center" className={cn("border-slate-300 font-normal", isOutOfStock ? "text-red-950 font-semibold" : getCellColor(good.banani))}>
+                          <TableCell align="center" className={cn("border-slate-300 font-normal", isOutOfStock ? "text-red-950 font-semibold" : getCellColor(availBanani))}>
                             {isEditing ? (
                               <input 
                                 type="number"
@@ -6191,7 +6202,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                                 value={editData.banani || 0} 
                                 onChange={e => setEditData({ ...editData, banani: Number(e.target.value) || 0 })}
                               />
-                            ) : Math.round(good.banani || 0)}
+                            ) : Math.round(availBanani || 0)}
                           </TableCell>
                           <TableCell className={cn("text-xs border-slate-300", isOutOfStock ? "text-red-950/80 font-medium" : "text-gray-800 font-normal italic")}>
                             {isEditing ? (
