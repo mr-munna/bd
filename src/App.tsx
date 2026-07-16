@@ -72,6 +72,7 @@ import {
 } from 'firebase/auth';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { db, auth } from './firebase';
 import { Tile, Good, Tool, Category, BookedItem, Tab, UserRole, UserDoc, UserStatus } from './types';
 import { motion, AnimatePresence } from 'motion/react';
@@ -2881,6 +2882,324 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
     });
   };
 
+  const downloadTilesPDF = () => {
+    try {
+      const doc = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      if (typeof (doc as any).setCharSpace === 'function') {
+        (doc as any).setCharSpace(0);
+      }
+
+      // Header
+      doc.setFontSize(20);
+      doc.setTextColor(15, 23, 42); // slate-900
+      doc.text("BAROBI DESIGN", 14, 15);
+      
+      doc.setFontSize(10);
+      doc.setTextColor(100, 116, 139); // slate-500
+      doc.text("TILES STOCK STATUS REPORT", 14, 21);
+      doc.text(`Printed Date: ${new Date().toLocaleDateString()}`, 240, 21);
+      
+      doc.setDrawColor(226, 232, 240); // slate-200
+      doc.line(14, 24, 283, 24);
+
+      // Prepare headers
+      const headers = [
+        "SL", "Name", "Size", "Brand", "Total SFT", "Total PCS", 
+        "Dia-Bari SFT", "Dia-Bari PCS", "Bonorupa SFT", "Bonorupa PCS", 
+        "Banani SFT", "Banani PCS", "Bonorupa 2 SFT", "Bonorupa 2 PCS"
+      ];
+
+      // Prepare body data
+      const rows = displayTiles.map((tile, index) => {
+        const currentBookings = bookedItems.filter(b => 
+          !b.deleted && 
+          b.name && tile.name && 
+          b.name.trim().toLowerCase() === tile.name.trim().toLowerCase() && 
+          (b.size || '').trim().toLowerCase() === (tile.size || '').trim().toLowerCase() && 
+          (b.brand || '').trim().toLowerCase() === (tile.brand || '').trim().toLowerCase()
+        );
+        const bookedSft = currentBookings.reduce((sum, b) => sum + (b.qtySft || 0), 0);
+        const bookedPcs = currentBookings.reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
+        const stockSft = Math.round((tile.totalSft - bookedSft) * 100) / 100;
+        const stockPcs = Math.round(tile.totalPcs - bookedPcs);
+        const isOutOfStock = stockSft <= 0 || stockPcs <= 0;
+
+        const diaBariBookedSft = currentBookings.filter(b => b.warehouse === 'diaBari' || !b.warehouse).reduce((sum, b) => sum + (b.qtySft || 0), 0);
+        const diaBariBookedPcs = currentBookings.filter(b => b.warehouse === 'diaBari' || !b.warehouse).reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
+
+        const bonorupaBookedSft = currentBookings.filter(b => b.warehouse === 'bonorupa').reduce((sum, b) => sum + (b.qtySft || 0), 0);
+        const bonorupaBookedPcs = currentBookings.filter(b => b.warehouse === 'bonorupa').reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
+
+        const bananiBookedSft = currentBookings.filter(b => b.warehouse === 'banani').reduce((sum, b) => sum + (b.qtySft || 0), 0);
+        const bananiBookedPcs = currentBookings.filter(b => b.warehouse === 'banani').reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
+
+        const dokhinkhanBookedSft = currentBookings.filter(b => b.warehouse === 'dokhinkhan').reduce((sum, b) => sum + (b.qtySft || 0), 0);
+        const dokhinkhanBookedPcs = currentBookings.filter(b => b.warehouse === 'dokhinkhan').reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
+
+        const availDiaBariSft = Math.max(0, (tile.diaBariSft || 0) - diaBariBookedSft);
+        const availDiaBariPcs = Math.max(0, (tile.diaBariPcs || 0) - diaBariBookedPcs);
+
+        const availBonorupaSft = Math.max(0, (tile.bonorupaSft || 0) - bonorupaBookedSft);
+        const availBonorupaPcs = Math.max(0, (tile.bonorupaPcs || 0) - bonorupaBookedPcs);
+
+        const availBananiSft = Math.max(0, (tile.bananiSft || 0) - bananiBookedSft);
+        const availBananiPcs = Math.max(0, (tile.bananiPcs || 0) - bananiBookedPcs);
+
+        const availDokhinkhanSft = Math.max(0, (tile.dokhinkhanSft || 0) - dokhinkhanBookedSft);
+        const availDokhinkhanPcs = Math.max(0, (tile.dokhinkhanPcs || 0) - dokhinkhanBookedPcs);
+
+        return [
+          index + 1,
+          tile.name || '',
+          tile.size || '',
+          tile.brand || '',
+          isOutOfStock ? 0 : Number((stockSft || 0).toFixed(2)),
+          isOutOfStock ? 0 : Math.round(stockPcs || 0),
+          isOutOfStock ? 0 : Number((availDiaBariSft || 0).toFixed(2)),
+          isOutOfStock ? 0 : Math.round(availDiaBariPcs || 0),
+          isOutOfStock ? 0 : Number((availBonorupaSft || 0).toFixed(2)),
+          isOutOfStock ? 0 : Math.round(availBonorupaPcs || 0),
+          isOutOfStock ? 0 : Number((availBananiSft || 0).toFixed(2)),
+          isOutOfStock ? 0 : Math.round(availBananiPcs || 0),
+          isOutOfStock ? 0 : Number((availDokhinkhanSft || 0).toFixed(2)),
+          isOutOfStock ? 0 : Math.round(availDokhinkhanPcs || 0)
+        ];
+      });
+
+      autoTable(doc, {
+        head: [headers],
+        body: rows,
+        startY: 28,
+        theme: 'grid',
+        styles: {
+          fontSize: 8,
+          cellPadding: 2,
+          font: 'helvetica',
+          textColor: [15, 23, 42], // slate-900
+          lineColor: [226, 232, 240], // slate-200
+        },
+        headStyles: {
+          fillColor: [15, 23, 42], // slate-900
+          textColor: [255, 255, 255],
+          fontSize: 8.5,
+          fontStyle: 'bold',
+          halign: 'center'
+        },
+        columnStyles: {
+          0: { halign: 'center', cellWidth: 10 },
+          1: { fontStyle: 'bold' },
+          2: { halign: 'center' },
+          3: { halign: 'center' },
+          4: { halign: 'center', fillColor: [241, 245, 249] }, // Slate-100 accent
+          5: { halign: 'center', fillColor: [241, 245, 249] },
+          6: { halign: 'center' },
+          7: { halign: 'center' },
+          8: { halign: 'center' },
+          9: { halign: 'center' },
+          10: { halign: 'center' },
+          11: { halign: 'center' },
+          12: { halign: 'center' },
+          13: { halign: 'center' }
+        },
+        alternateRowStyles: {
+          fillColor: [248, 250, 252] // slate-50
+        }
+      });
+
+      doc.save(`Tiles_Stock_Status_${new Date().toISOString().split('T')[0]}.pdf`);
+      toast.success("Tiles Stock Status PDF downloaded successfully!");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to generate PDF");
+    }
+  };
+
+  const downloadSanitaryPDF = () => {
+    try {
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      if (typeof (doc as any).setCharSpace === 'function') {
+        (doc as any).setCharSpace(0);
+      }
+
+      // Header
+      doc.setFontSize(20);
+      doc.setTextColor(15, 23, 42); // slate-900
+      doc.text("BAROBI DESIGN", 14, 15);
+      
+      doc.setFontSize(10);
+      doc.setTextColor(100, 116, 139); // slate-500
+      doc.text("SANITARY ITEMS STOCK STATUS REPORT", 14, 21);
+      doc.text(`Printed Date: ${new Date().toLocaleDateString()}`, 150, 21);
+      
+      doc.setDrawColor(226, 232, 240); // slate-200
+      doc.line(14, 24, 196, 24);
+
+      // Prepare headers
+      const headers = [
+        "SL", "Brand", "Code", "Description", "Total PCS", 
+        "Bonorupa 2", "Banani"
+      ];
+
+      // Prepare body data
+      const rows = displayGoods.map((good, index) => {
+        const currentBookings = bookedItems.filter(b => 
+          !b.deleted && 
+          b.code && good.code && 
+          b.code.trim().toLowerCase() === good.code.trim().toLowerCase()
+        );
+        const bookedPcs = currentBookings.reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
+        const totalPcs = Math.round((good.dokhinkhan || 0) + (good.bonorupa || 0) + (good.banani || 0));
+        const stockPcs = Math.max(0, Math.round(totalPcs - bookedPcs));
+        const isOutOfStock = stockPcs <= 0;
+
+        const dokhinkhanBookedPcs = currentBookings.filter(b => b.warehouse === 'dokhinkhan' || !b.warehouse).reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
+        const bananiBookedPcs = currentBookings.filter(b => b.warehouse === 'banani').reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
+
+        const availDokhinkhan = Math.max(0, Math.round((good.dokhinkhan || 0) - dokhinkhanBookedPcs));
+        const availBanani = Math.max(0, Math.round((good.banani || 0) - bananiBookedPcs));
+
+        return [
+          index + 1,
+          good.brand || '',
+          good.code || '',
+          good.description || '',
+          isOutOfStock ? 0 : Math.round(stockPcs || 0),
+          isOutOfStock ? 0 : Math.round(availDokhinkhan || 0),
+          isOutOfStock ? 0 : Math.round(availBanani || 0)
+        ];
+      });
+
+      autoTable(doc, {
+        head: [headers],
+        body: rows,
+        startY: 28,
+        theme: 'grid',
+        styles: {
+          fontSize: 8.5,
+          cellPadding: 2.5,
+          font: 'helvetica',
+          textColor: [15, 23, 42], // slate-900
+          lineColor: [226, 232, 240], // slate-200
+        },
+        headStyles: {
+          fillColor: [15, 23, 42], // slate-900
+          textColor: [255, 255, 255],
+          fontSize: 9,
+          fontStyle: 'bold',
+          halign: 'center'
+        },
+        columnStyles: {
+          0: { halign: 'center', cellWidth: 10 },
+          1: { halign: 'center' },
+          2: { halign: 'center', fontStyle: 'bold' },
+          3: { halign: 'left' },
+          4: { halign: 'center', fillColor: [241, 245, 249] },
+          5: { halign: 'center' },
+          6: { halign: 'center' }
+        },
+        alternateRowStyles: {
+          fillColor: [248, 250, 252] // slate-50
+        }
+      });
+
+      doc.save(`Sanitary_Stock_Status_${new Date().toISOString().split('T')[0]}.pdf`);
+      toast.success("Sanitary Stock Status PDF downloaded successfully!");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to generate PDF");
+    }
+  };
+
+  const downloadToolsPDF = () => {
+    try {
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      if (typeof (doc as any).setCharSpace === 'function') {
+        (doc as any).setCharSpace(0);
+      }
+
+      // Header
+      doc.setFontSize(20);
+      doc.setTextColor(15, 23, 42); // slate-900
+      doc.text("BAROBI DESIGN", 14, 15);
+      
+      doc.setFontSize(10);
+      doc.setTextColor(100, 116, 139); // slate-500
+      doc.text("BAROBI TOOLS STOCK STATUS REPORT", 14, 21);
+      doc.text(`Printed Date: ${new Date().toLocaleDateString()}`, 150, 21);
+      
+      doc.setDrawColor(226, 232, 240); // slate-200
+      doc.line(14, 24, 196, 24);
+
+      // Prepare headers
+      const headers = [
+        "SL", "Details", "Qty", "Issue To & Date", "Status"
+      ];
+
+      // Prepare body data
+      const rows = displayTools.map((tool, index) => {
+        return [
+          index + 1,
+          tool.details || '',
+          Math.round(tool.qty || 0),
+          tool.issueToDate || '',
+          tool.states || ''
+        ];
+      });
+
+      autoTable(doc, {
+        head: [headers],
+        body: rows,
+        startY: 28,
+        theme: 'grid',
+        styles: {
+          fontSize: 8.5,
+          cellPadding: 2.5,
+          font: 'helvetica',
+          textColor: [15, 23, 42], // slate-900
+          lineColor: [226, 232, 240], // slate-200
+        },
+        headStyles: {
+          fillColor: [15, 23, 42], // slate-900
+          textColor: [255, 255, 255],
+          fontSize: 9,
+          fontStyle: 'bold',
+          halign: 'center'
+        },
+        columnStyles: {
+          0: { halign: 'center', cellWidth: 10 },
+          1: { halign: 'left', fontStyle: 'bold' },
+          2: { halign: 'center', fillColor: [241, 245, 249] },
+          3: { halign: 'center' },
+          4: { halign: 'center' }
+        },
+        alternateRowStyles: {
+          fillColor: [248, 250, 252] // slate-50
+        }
+      });
+
+      doc.save(`Barobi_Tools_Stock_Status_${new Date().toISOString().split('T')[0]}.pdf`);
+      toast.success("Barobi Tools Stock Status PDF downloaded successfully!");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to generate PDF");
+    }
+  };
+
   const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -5437,6 +5756,16 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   <MobileSearchInput value={searchQuery} onChange={setSearchQuery} />
                 </h2>
                 <div className="flex gap-2">
+                  {isAdmin && (
+                    <Button 
+                      onClick={downloadTilesPDF} 
+                      variant="outline" 
+                      size="sm" 
+                      className="text-red-700 border-red-200 hover:bg-red-50 flex items-center gap-1.5 font-semibold"
+                    >
+                      <Download className="w-4 h-4" /> Download PDF
+                    </Button>
+                  )}
                   {isAdmin && (activeTab === 'master' || activeTab === 'master_sheet') && (
                     <div className="flex items-center gap-2">
                       {canDeleteMasterItems && selectedTiles.length > 0 && (
@@ -5924,6 +6253,16 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   <MobileSearchInput value={searchQuery} onChange={setSearchQuery} />
                 </h2>
                 <div className="flex gap-2">
+                  {isAdmin && (
+                    <Button 
+                      onClick={downloadSanitaryPDF} 
+                      variant="outline" 
+                      size="sm" 
+                      className="text-red-700 border-red-200 hover:bg-red-50 flex items-center gap-1.5 font-semibold"
+                    >
+                      <Download className="w-4 h-4" /> Download PDF
+                    </Button>
+                  )}
                   {isAdmin && (activeTab === 'master' || activeTab === 'master_sheet') && (
                     <div className="flex items-center gap-2">
                       {canDeleteMasterItems && selectedGoods.length > 0 && (
@@ -6313,6 +6652,16 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   <MobileSearchInput value={searchQuery} onChange={setSearchQuery} />
                 </h2>
                 <div className="flex gap-2">
+                  {isAdmin && (
+                    <Button 
+                      onClick={downloadToolsPDF} 
+                      variant="outline" 
+                      size="sm" 
+                      className="text-red-700 border-red-200 hover:bg-red-50 flex items-center gap-1.5 font-semibold"
+                    >
+                      <Download className="w-4 h-4" /> Download PDF
+                    </Button>
+                  )}
                   {isAdmin && (activeTab === 'master' || activeTab === 'master_sheet') && (
                     <div className="flex items-center gap-2">
                       {canDeleteMasterItems && selectedTools.length > 0 && (
