@@ -222,6 +222,12 @@ service cloud.firestore {
       allow create, update: if isApproved();
       allow delete: if isSuperAdmin();
     }
+
+    match /activity_logs/{logId} {
+      allow read: if isSupremeAdmin();
+      allow create: if isApproved() || isSignedIn();
+      allow delete: if isSupremeAdmin();
+    }
     
     // Test collection for initial connection validation
     match /test/{docId} {

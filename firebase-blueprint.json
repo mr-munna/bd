@@ -228,6 +228,23 @@
         "status": { "type": "string" }
       },
       "required": ["id"]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "System activity logs for user operations like add, edit, delete, book, etc.",
+      "type": "object",
+      "properties": {
+        "timestamp": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "action": { "type": "string" },
+        "itemType": { "type": "string" },
+        "itemId": { "type": "string" },
+        "itemName": { "type": "string" },
+        "details": { "type": "string" }
+      },
+      "required": ["timestamp", "userEmail", "action", "details"]
     }
   },
   "firestore": {
@@ -270,6 +287,10 @@
     "/delivery_approvals": {
       "schema": "DeliveryApproval",
       "description": "Delivery approval requests"
+    },
+    "/activity_logs": {
+      "schema": "ActivityLog",
+      "description": "User operation history and audit logs"
     }
   }
 }
