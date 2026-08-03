@@ -38,7 +38,8 @@ import {
   Globe,
   ExternalLink,
   Activity,
-  ArrowRight
+  ArrowRight,
+  History
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import * as XLSX from 'xlsx';
@@ -56,7 +57,8 @@ import {
   setDoc,
   writeBatch,
   getDocFromServer,
-  where
+  where,
+  serverTimestamp
 } from 'firebase/firestore';
 import { 
   signInWithPopup, 
@@ -74,7 +76,8 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { db, auth } from './firebase';
-import { Tile, Good, Tool, Category, BookedItem, Tab, UserRole, UserDoc, UserStatus } from './types';
+import { Tile, Good, Tool, Category, BookedItem, Tab, UserRole, UserDoc, UserStatus, ActivityLog } from './types';
+import { ActivityLogManager } from './components/ActivityLogManager';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -1439,6 +1442,7 @@ export default function App() {
   const [bookedItems, setBookedItems] = useState<BookedItem[]>([]);
   const [users, setUsers] = useState<UserDoc[]>([]);
   const [currentUserDoc, setCurrentUserDoc] = useState<UserDoc | null>(null);
+  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
 
   const [selectedTiles, setSelectedTiles] = useState<string[]>([]);
   const [selectedGoods, setSelectedGoods] = useState<string[]>([]);
@@ -2391,6 +2395,18 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
       }
     });
 
+    let unsubActivityLogs = () => {};
+    const isOwner = user?.email === 'bijoymahmudmunna@gmail.com' || currentUserDoc?.role === 'supreme_admin';
+    if (isOwner) {
+      unsubActivityLogs = onSnapshot(query(collection(db, 'activity_logs')), (snap) => {
+        const logs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as ActivityLog));
+        logs.sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
+        setActivityLogs(logs);
+      }, (err) => {
+        console.error("Activity logs error:", err);
+      });
+    }
+
     return () => {
       unsubTiles();
       unsubGoods();
@@ -2399,8 +2415,39 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
       unsubSavedQuotes();
       unsubMasterLog();
       unsubBookedLog();
+      unsubActivityLogs();
     };
   }, [isAuthReady, user, currentUserDoc, isApproved]);
+
+  const logActivity = async (
+    action: ActivityLog['action'],
+    itemType: ActivityLog['itemType'],
+    details: string,
+    itemId?: string,
+    itemName?: string
+  ) => {
+    try {
+      const u = auth.currentUser;
+      const userName = currentUserDoc?.displayName || u?.displayName || u?.email?.split('@')[0] || 'Member';
+      const userEmail = currentUserDoc?.email || u?.email || 'unknown@user.com';
+      const userId = u?.uid || 'unknown';
+
+      await addDoc(collection(db, 'activity_logs'), {
+        timestamp: new Date().toISOString(),
+        createdAt: serverTimestamp(),
+        userId,
+        userName,
+        userEmail,
+        action,
+        itemType,
+        itemId: itemId || '',
+        itemName: itemName || '',
+        details
+      });
+    } catch (e) {
+      console.error("Error logging activity:", e);
+    }
+  };
 
   const logPageChange = async (category: string) => {
     try {
@@ -2510,6 +2557,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
       const itemName = (data as any)?.name || (data as any)?.code || (data as any)?.details || id;
       sendNotification('edit', category, itemName, data);
       await logPageChange(category);
+      await logActivity('edit', category === 'tiles' ? 'tile' : category === 'goods' ? 'good' : 'tool', `Edited product ${itemName}`, id, itemName);
     } catch (err: any) {
       console.error("Update error:", err);
       showStatus('error', `Failed to update item: ${err.message}`);
@@ -3567,6 +3615,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
             showStatus('success', 'Item permanently deleted from Master Sheet.');
             sendNotification('delete', collectionName, itemName, { id, permanent: true });
             await logPageChange(collectionName);
+            await logActivity('delete', collectionName === 'tiles' ? 'tile' : collectionName === 'goods' ? 'good' : collectionName === 'tools' ? 'tool' : 'booking', `Permanently deleted item ${itemName}`, id, itemName);
           } else {
             await updateDoc(doc(db, collectionName, id), { deleted: true });
             
@@ -3599,6 +3648,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
             showStatus('success', 'Item moved to Master Sheet (Deleted).');
             sendNotification('delete', collectionName, itemName, { id });
             await logPageChange(collectionName);
+            await logActivity('delete', collectionName === 'tiles' ? 'tile' : collectionName === 'goods' ? 'good' : collectionName === 'tools' ? 'tool' : 'booking', `Deleted item ${itemName} (Moved to Master Sheet)`, id, itemName);
           }
         } catch (err: any) {
           console.error("Delete error:", err);
@@ -4445,6 +4495,18 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   <ShieldCheck className="w-5 h-5 text-teal-400" /> Users
                 </button>
               )}
+
+              {(user?.email === 'bijoymahmudmunna@gmail.com' || currentUserDoc?.role === 'supreme_admin' || canCurrentUserAccessPage('activity_log')) && (
+                <button
+                  onClick={() => setActiveTab('activity_log')}
+                  className={cn(
+                    "w-full px-4 py-3 rounded-xl font-medium transition-all flex items-center justify-start gap-3 uppercase tracking-wider text-sm text-left",
+                    activeTab === 'activity_log' ? "bg-white text-[#0f172a] font-bold shadow-sm" : "text-slate-300 hover:bg-white/10 hover:text-white"
+                  )}
+                >
+                  <History className="w-5 h-5 text-emerald-400" /> Activity Logs
+                </button>
+              )}
             </nav>
             
             {/* Sidebar Footer (Backup/Restore) */}
@@ -4509,6 +4571,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   {activeTab === 'master_sheet' && 'Master Sheet'}
                   {activeTab === 'users' && 'Users'}
                   {activeTab === 'sales' && 'Sales / Invoice'}
+                  {activeTab === 'activity_log' && 'Activity Logs'}
                 </h2>
               </div>
 
@@ -4525,6 +4588,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   {activeTab === 'master_sheet' && 'Master Sheet'}
                   {activeTab === 'users' && 'Users'}
                   {activeTab === 'sales' && 'Sales / Invoice'}
+                  {activeTab === 'activity_log' && 'Activity Logs'}
                 </h2>
                 
             {user && isApproved && (
@@ -4722,6 +4786,17 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     )}
                   >
                     <ShieldCheck className="w-5 h-5" /> Users
+                  </button>
+                )}
+                {(user?.email === 'bijoymahmudmunna@gmail.com' || currentUserDoc?.role === 'supreme_admin' || canCurrentUserAccessPage('activity_log')) && (
+                  <button
+                    onClick={() => { setActiveTab('activity_log'); setIsMenuOpen(false); }}
+                    className={cn(
+                      "w-full px-4 py-3 rounded-xl font-medium flex items-center gap-3 uppercase tracking-wider text-sm",
+                      activeTab === 'activity_log' ? "bg-[#0f172a] text-white font-bold" : "text-gray-500 hover:bg-gray-50"
+                    )}
+                  >
+                    <History className="w-5 h-5 text-emerald-600" /> Activity Logs
                   </button>
                 )}
                 {isAdmin && (
@@ -5401,14 +5476,20 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   try {
                     await updateDoc(doc(db, 'users', id), { role });
                     showStatus('success', 'Role updated successfully');
+                    const targetUser = users.find(u => u.id === id);
+                    const name = targetUser?.displayName || targetUser?.email || id;
+                    await logActivity('role_change', 'user', `Updated user role of ${name} to ${role}`, id, name);
                   } catch (err: any) {
                     showStatus('error', 'Failed to update role');
                   }
                 }}
                 onUpdateStatus={async (id, status) => {
                   try {
-                    await updateDoc(doc(db, 'users', id), { status });
+                    await updateDoc(doc(doc(db, 'users', id).firestore, 'users', id), { status });
                     showStatus('success', 'Status updated successfully');
+                    const targetUser = users.find(u => u.id === id);
+                    const name = targetUser?.displayName || targetUser?.email || id;
+                    await logActivity('status_change', 'user', `Updated user status of ${name} to ${status}`, id, name);
                   } catch (err: any) {
                     showStatus('error', 'Failed to update status');
                   }
@@ -5417,6 +5498,9 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   try {
                     await updateDoc(doc(db, 'users', id), { expiryDate });
                     showStatus('success', 'Expiry date updated');
+                    const targetUser = users.find(u => u.id === id);
+                    const name = targetUser?.displayName || targetUser?.email || id;
+                    await logActivity('role_change', 'user', `Updated expiry date of ${name} to ${expiryDate || 'Unlimited'}`, id, name);
                   } catch (err: any) {
                     showStatus('error', 'Failed to update expiry');
                   }
@@ -5428,8 +5512,11 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     type: 'danger',
                     onConfirm: async () => {
                       try {
+                        const targetUser = users.find(u => u.id === id);
+                        const name = targetUser?.displayName || targetUser?.email || id;
                         await deleteDoc(doc(db, 'users', id));
                         showStatus('success', 'User deleted');
+                        await logActivity('delete', 'user', `Deleted user account ${name}`, id, name);
                       } catch (err: any) {
                         showStatus('error', 'Failed to delete user');
                       }
@@ -5449,6 +5536,9 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   try {
                     await updateDoc(doc(db, 'users', id), { role });
                     showStatus('success', 'Role updated successfully');
+                    const targetUser = users.find(u => u.id === id);
+                    const name = targetUser?.displayName || targetUser?.email || id;
+                    await logActivity('role_change', 'user', `Updated user role of ${name} to ${role}`, id, name);
                   } catch (err: any) {
                     showStatus('error', 'Failed to update role');
                   }
@@ -5457,6 +5547,9 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   try {
                     await updateDoc(doc(db, 'users', id), { status });
                     showStatus('success', 'Status updated successfully');
+                    const targetUser = users.find(u => u.id === id);
+                    const name = targetUser?.displayName || targetUser?.email || id;
+                    await logActivity('status_change', 'user', `Updated user status of ${name} to ${status}`, id, name);
                   } catch (err: any) {
                     showStatus('error', 'Failed to update status');
                   }
@@ -5465,6 +5558,9 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   try {
                     await updateDoc(doc(db, 'users', id), { expiryDate });
                     showStatus('success', 'Expiry date updated');
+                    const targetUser = users.find(u => u.id === id);
+                    const name = targetUser?.displayName || targetUser?.email || id;
+                    await logActivity('role_change', 'user', `Updated expiry date of ${name} to ${expiryDate || 'Unlimited'}`, id, name);
                   } catch (err: any) {
                     showStatus('error', 'Failed to update expiry');
                   }
@@ -5476,8 +5572,11 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     type: 'danger',
                     onConfirm: async () => {
                       try {
+                        const targetUser = users.find(u => u.id === id);
+                        const name = targetUser?.displayName || targetUser?.email || id;
                         await deleteDoc(doc(db, 'users', id));
                         showStatus('success', 'User deleted');
+                        await logActivity('delete', 'user', `Deleted user account ${name}`, id, name);
                       } catch (err: any) {
                         showStatus('error', 'Failed to delete user');
                       }
@@ -5497,6 +5596,9 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   try {
                     await updateDoc(doc(db, 'users', id), { role });
                     showStatus('success', 'Role updated successfully');
+                    const targetUser = users.find(u => u.id === id);
+                    const name = targetUser?.displayName || targetUser?.email || id;
+                    await logActivity('role_change', 'user', `Updated user role of ${name} to ${role}`, id, name);
                   } catch (err: any) {
                     showStatus('error', 'Failed to update role');
                   }
@@ -5505,6 +5607,9 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   try {
                     await updateDoc(doc(db, 'users', id), { status });
                     showStatus('success', 'Status updated successfully');
+                    const targetUser = users.find(u => u.id === id);
+                    const name = targetUser?.displayName || targetUser?.email || id;
+                    await logActivity('status_change', 'user', `Updated user status of ${name} to ${status}`, id, name);
                   } catch (err: any) {
                     showStatus('error', 'Failed to update status');
                   }
@@ -5513,6 +5618,9 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   try {
                     await updateDoc(doc(db, 'users', id), { expiryDate });
                     showStatus('success', 'Expiry date updated');
+                    const targetUser = users.find(u => u.id === id);
+                    const name = targetUser?.displayName || targetUser?.email || id;
+                    await logActivity('role_change', 'user', `Updated expiry date of ${name} to ${expiryDate || 'Unlimited'}`, id, name);
                   } catch (err: any) {
                     showStatus('error', 'Failed to update expiry');
                   }
@@ -5524,8 +5632,11 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     type: 'danger',
                     onConfirm: async () => {
                       try {
+                        const targetUser = users.find(u => u.id === id);
+                        const name = targetUser?.displayName || targetUser?.email || id;
                         await deleteDoc(doc(db, 'users', id));
                         showStatus('success', 'User deleted');
+                        await logActivity('delete', 'user', `Deleted user account ${name}`, id, name);
                       } catch (err: any) {
                         showStatus('error', 'Failed to delete user');
                       }
@@ -5545,6 +5656,9 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   try {
                     await updateDoc(doc(db, 'users', id), { role });
                     showStatus('success', 'Role updated successfully');
+                    const targetUser = users.find(u => u.id === id);
+                    const name = targetUser?.displayName || targetUser?.email || id;
+                    await logActivity('role_change', 'user', `Updated user role of ${name} to ${role}`, id, name);
                   } catch (err: any) {
                     showStatus('error', 'Failed to update role');
                   }
@@ -5553,6 +5667,9 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   try {
                     await updateDoc(doc(db, 'users', id), { status });
                     showStatus('success', 'Status updated successfully');
+                    const targetUser = users.find(u => u.id === id);
+                    const name = targetUser?.displayName || targetUser?.email || id;
+                    await logActivity('status_change', 'user', `Updated user status of ${name} to ${status}`, id, name);
                   } catch (err: any) {
                     showStatus('error', 'Failed to update status');
                   }
@@ -5561,6 +5678,9 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   try {
                     await updateDoc(doc(db, 'users', id), { expiryDate });
                     showStatus('success', 'Expiry date updated');
+                    const targetUser = users.find(u => u.id === id);
+                    const name = targetUser?.displayName || targetUser?.email || id;
+                    await logActivity('role_change', 'user', `Updated expiry date of ${name} to ${expiryDate || 'Unlimited'}`, id, name);
                   } catch (err: any) {
                     showStatus('error', 'Failed to update expiry');
                   }
@@ -5572,8 +5692,11 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     type: 'danger',
                     onConfirm: async () => {
                       try {
+                        const targetUser = users.find(u => u.id === id);
+                        const name = targetUser?.displayName || targetUser?.email || id;
                         await deleteDoc(doc(db, 'users', id));
                         showStatus('success', 'User deleted');
+                        await logActivity('delete', 'user', `Deleted user account ${name}`, id, name);
                       } catch (err: any) {
                         showStatus('error', 'Failed to delete user');
                       }
@@ -5593,6 +5716,9 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   try {
                     await updateDoc(doc(db, 'users', id), { role });
                     showStatus('success', 'Role updated successfully');
+                    const targetUser = users.find(u => u.id === id);
+                    const name = targetUser?.displayName || targetUser?.email || id;
+                    await logActivity('role_change', 'user', `Updated user role of ${name} to ${role}`, id, name);
                   } catch (err: any) {
                     showStatus('error', 'Failed to update role');
                   }
@@ -5601,6 +5727,9 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   try {
                     await updateDoc(doc(db, 'users', id), { status });
                     showStatus('success', 'Status updated successfully');
+                    const targetUser = users.find(u => u.id === id);
+                    const name = targetUser?.displayName || targetUser?.email || id;
+                    await logActivity('status_change', 'user', `Updated user status of ${name} to ${status}`, id, name);
                   } catch (err: any) {
                     showStatus('error', 'Failed to update status');
                   }
@@ -5609,6 +5738,9 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   try {
                     await updateDoc(doc(db, 'users', id), { expiryDate });
                     showStatus('success', 'Expiry date updated');
+                    const targetUser = users.find(u => u.id === id);
+                    const name = targetUser?.displayName || targetUser?.email || id;
+                    await logActivity('role_change', 'user', `Updated expiry date of ${name} to ${expiryDate || 'Unlimited'}`, id, name);
                   } catch (err: any) {
                     showStatus('error', 'Failed to update expiry');
                   }
@@ -5620,8 +5752,11 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     type: 'danger',
                     onConfirm: async () => {
                       try {
+                        const targetUser = users.find(u => u.id === id);
+                        const name = targetUser?.displayName || targetUser?.email || id;
                         await deleteDoc(doc(db, 'users', id));
                         showStatus('success', 'User deleted');
+                        await logActivity('delete', 'user', `Deleted user account ${name}`, id, name);
                       } catch (err: any) {
                         showStatus('error', 'Failed to delete user');
                       }
@@ -5681,7 +5816,14 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
             </section>
           )}
 
-
+          {/* Activity Logs Section (App Owner Only) */}
+          {activeTab === 'activity_log' && (user?.email === 'bijoymahmudmunna@gmail.com' || currentUserDoc?.role === 'supreme_admin' || canCurrentUserAccessPage('activity_log')) && (
+            <ActivityLogManager
+              logs={activityLogs}
+              isAppOwner={user?.email === 'bijoymahmudmunna@gmail.com' || currentUserDoc?.role === 'supreme_admin'}
+              users={users}
+            />
+          )}
 
           {/* Stock Items Section */}
           {(activeTab === 'stock' || (activeTab !== 'master' && activeTab !== 'master_sheet' && (activeTab === 'search' || showSearchBox) && searchQuery.trim() !== '' && filteredStockItems.length > 0)) && (
@@ -8673,9 +8815,27 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     try {
                       if (editingItem) {
                         await updateDoc(doc(db, category, editingItem.item.id), data);
+                        const itemName = (data as any)?.name || (data as any)?.code || (data as any)?.details || editingItem.item.id;
+                        const isBooked = category === 'bookedItems';
+                        await logActivity(
+                          isBooked ? 'book' : 'edit',
+                          isBooked ? 'booking' : (category === 'tiles' ? 'tile' : category === 'goods' ? 'good' : 'tool'),
+                          isBooked ? `Updated booking for client ${data.clientName || 'N/A'} (${itemName})` : `Edited product ${itemName}`,
+                          editingItem.item.id,
+                          itemName
+                        );
                         toast.success('Item updated successfully.');
                       } else {
-                        await addDoc(collection(db, category), data);
+                        const docRef = await addDoc(collection(db, category), data);
+                        const itemName = (data as any)?.name || (data as any)?.code || (data as any)?.details || docRef.id;
+                        const isBooked = category === 'bookedItems';
+                        await logActivity(
+                          isBooked ? 'book' : 'add',
+                          isBooked ? 'booking' : (category === 'tiles' ? 'tile' : category === 'goods' ? 'good' : 'tool'),
+                          isBooked ? `Booked product ${itemName} for client ${data.clientName || 'N/A'}` : `Added new product ${itemName}`,
+                          docRef.id,
+                          itemName
+                        );
                         toast.success('Item added successfully.');
                       }
                       await logPageChange(category);

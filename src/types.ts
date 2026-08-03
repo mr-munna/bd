@@ -63,7 +63,21 @@ export interface BookedItem {
 }
 
 export type Category = 'tiles' | 'goods' | 'tools' | 'bookedItems';
-export type Tab = 'landing' | 'search' | 'master' | 'booked' | 'stock' | 'quote' | 'master_sheet' | 'users' | 'view_quote' | 'sales' | 'settings' | 'billing' | 'delivery_approval';
+export type Tab = 'landing' | 'search' | 'master' | 'booked' | 'stock' | 'quote' | 'master_sheet' | 'users' | 'view_quote' | 'sales' | 'settings' | 'billing' | 'delivery_approval' | 'activity_log';
+
+export interface ActivityLog {
+  id?: string;
+  timestamp: string;
+  createdAt?: any;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  action: 'add' | 'edit' | 'delete' | 'book' | 'unbook' | 'approve' | 'reject' | 'import' | 'clear' | 'role_change' | 'status_change' | 'other';
+  itemType: 'tile' | 'good' | 'tool' | 'booking' | 'delivery' | 'sale' | 'user' | 'system';
+  itemId?: string;
+  itemName?: string;
+  details: string;
+}
 
 export type UserRole = 'supreme_admin' | 'super_admin' | 'admin' | 'user' | 'guest';
 export type UserStatus = 'pending' | 'approved' | 'rejected';
