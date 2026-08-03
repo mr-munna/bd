@@ -114,6 +114,33 @@ function shouldOpenInNewTab(url: string): boolean {
   return blockers.some(domain => url.toLowerCase().includes(domain));
 }
 
+// Helpers for sorting tiles by size (e.g. 160x320, 119.8X119.8, 119.8x59.8, etc.)
+function parseTileSize(sizeStr?: string) {
+  if (!sizeStr) return { dim1: 0, dim2: 0, maxDim: 0, minDim: 0, area: 0 };
+  const matches = sizeStr.match(/(\d+(?:\.\d+)?)/g);
+  if (!matches || matches.length === 0) return { dim1: 0, dim2: 0, maxDim: 0, minDim: 0, area: 0 };
+  const dim1 = parseFloat(matches[0]) || 0;
+  const dim2 = matches.length > 1 ? parseFloat(matches[1]) || 0 : 0;
+  const maxDim = Math.max(dim1, dim2);
+  const minDim = Math.min(dim1, dim2);
+  const area = dim1 * dim2;
+  return { dim1, dim2, maxDim, minDim, area };
+}
+
+function compareTileSizes(sizeA?: string, sizeB?: string): number {
+  const a = parseTileSize(sizeA);
+  const b = parseTileSize(sizeB);
+
+  // Compare dim1 descending (e.g. 160 > 119.8 > 60)
+  if (b.dim1 !== a.dim1) return b.dim1 - a.dim1;
+  // Compare dim2 descending (e.g. 119.8 > 59.8)
+  if (b.dim2 !== a.dim2) return b.dim2 - a.dim2;
+  // Compare max dimension descending
+  if (b.maxDim !== a.maxDim) return b.maxDim - a.maxDim;
+  // Compare area descending
+  return b.area - a.area;
+}
+
 // --- Error Handling ---
 
 enum OperationType {
@@ -2281,7 +2308,13 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
     if (!isAuthReady || !user || !currentUserDoc || !isApproved) return;
 
     const unsubTiles = onSnapshot(query(collection(db, 'tiles'), orderBy('name')), (snap) => {
-      setTiles(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Tile)));
+      const fetchedTiles = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Tile));
+      fetchedTiles.sort((a, b) => {
+        const cmp = compareTileSizes(a.size, b.size);
+        if (cmp !== 0) return cmp;
+        return (a.name || '').localeCompare(b.name || '');
+      });
+      setTiles(fetchedTiles);
     }, (err) => {
       console.error("Tiles error:", err);
       handleFirestoreError(err, OperationType.GET, 'tiles');
@@ -3714,7 +3747,15 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
     }
   };
 
-  const activeTiles = useMemo(() => tiles.filter(t => !t.deleted), [tiles]);
+  const activeTiles = useMemo(() => {
+    return tiles
+      .filter(t => !t.deleted)
+      .sort((a, b) => {
+        const cmp = compareTileSizes(a.size, b.size);
+        if (cmp !== 0) return cmp;
+        return (a.name || '').localeCompare(b.name || '');
+      });
+  }, [tiles]);
   const activeGoods = useMemo(() => goods.filter(g => !g.deleted), [goods]);
   const activeTools = useMemo(() => tools.filter(t => !t.deleted), [tools]);
 
@@ -3763,7 +3804,11 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
       : stockItemsList;
     
     if (stockSubTab === 'tiles') {
-      return baseList.filter(item => item.type === 'tile');
+      return baseList.filter(item => item.type === 'tile').sort((a, b) => {
+        const cmp = compareTileSizes((a as any).size, (b as any).size);
+        if (cmp !== 0) return cmp;
+        return ((a as any).name || '').localeCompare((b as any).name || '');
+      });
     }
     if (stockSubTab === 'goods') {
       return baseList.filter(item => item.type === 'good');
@@ -3780,7 +3825,11 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
       (t.name || '').toLowerCase().includes(q) || 
       (t.brand || '').toLowerCase().includes(q) ||
       (t.size || '').toLowerCase().includes(q)
-    );
+    ).sort((a, b) => {
+      const cmp = compareTileSizes(a.size, b.size);
+      if (cmp !== 0) return cmp;
+      return (a.name || '').localeCompare(b.name || '');
+    });
   }, [tiles, activeTiles, searchQuery, activeTab]);
 
   const filteredGoods = useMemo(() => {
@@ -3806,9 +3855,16 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
   }, [tools, activeTools, searchQuery, activeTab]);
 
   const rawDisplayTiles = useMemo(() => {
-    if (activeTab === 'search' || (showSearchBox && searchQuery.trim() !== '')) return filteredTiles;
-    if (activeTab === 'master' || activeTab === 'stock') return activeTiles;
-    return tiles;
+    let source: Tile[];
+    if (activeTab === 'search' || (showSearchBox && searchQuery.trim() !== '')) source = filteredTiles;
+    else if (activeTab === 'master' || activeTab === 'stock') source = activeTiles;
+    else source = tiles;
+
+    return [...source].sort((a, b) => {
+      const cmp = compareTileSizes(a.size, b.size);
+      if (cmp !== 0) return cmp;
+      return (a.name || '').localeCompare(b.name || '');
+    });
   }, [activeTab, showSearchBox, searchQuery, filteredTiles, activeTiles, tiles]);
 
   const rawDisplayGoods = useMemo(() => {
