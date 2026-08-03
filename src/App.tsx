@@ -141,6 +141,29 @@ function compareTileSizes(sizeA?: string, sizeB?: string): number {
   return b.area - a.area;
 }
 
+function compareGoodTypes(a?: { type?: string; brand?: string; code?: string }, b?: { type?: string; brand?: string; code?: string }): number {
+  const typeA = (a?.type || '').trim();
+  const typeB = (b?.type || '').trim();
+
+  const isNA_A = !typeA || typeA.toUpperCase() === 'N/A' || typeA.toUpperCase() === 'NA' || typeA === '-';
+  const isNA_B = !typeB || typeB.toUpperCase() === 'N/A' || typeB.toUpperCase() === 'NA' || typeB === '-';
+
+  if (isNA_A && !isNA_B) return 1;
+  if (!isNA_A && isNA_B) return -1;
+
+  const cmp = typeA.localeCompare(typeB, undefined, { numeric: true, sensitivity: 'base' });
+  if (cmp !== 0) return cmp;
+
+  const brandA = (a?.brand || '').trim();
+  const brandB = (b?.brand || '').trim();
+  const brandCmp = brandA.localeCompare(brandB, undefined, { numeric: true, sensitivity: 'base' });
+  if (brandCmp !== 0) return brandCmp;
+
+  const codeA = (a?.code || '').trim();
+  const codeB = (b?.code || '').trim();
+  return codeA.localeCompare(codeB, undefined, { numeric: true, sensitivity: 'base' });
+}
+
 // --- Error Handling ---
 
 enum OperationType {
@@ -2320,8 +2343,10 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
       handleFirestoreError(err, OperationType.GET, 'tiles');
     });
 
-    const unsubGoods = onSnapshot(query(collection(db, 'goods'), orderBy('code')), (snap) => {
-      setGoods(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Good)));
+    const unsubGoods = onSnapshot(query(collection(db, 'goods')), (snap) => {
+      const fetchedGoods = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Good));
+      fetchedGoods.sort(compareGoodTypes);
+      setGoods(fetchedGoods);
     }, (err) => {
       console.error("Goods error:", err);
       handleFirestoreError(err, OperationType.GET, 'goods');
@@ -3079,7 +3104,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
 
       // Prepare headers
       const headers = [
-        "SL", "Brand", "Code", "Description", "Total PCS", 
+        "SL", "Type", "Brand", "Code", "Description", "Total PCS", 
         "Bonorupa 2", "Banani"
       ];
 
@@ -3103,6 +3128,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
 
         return [
           index + 1,
+          good.type || '',
           good.brand || '',
           good.code || '',
           good.description || '',
@@ -3408,10 +3434,12 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   return (lower === 'undefined' || lower === 'null') ? '' : s;
                 };
 
+                const typeVal = cleanStr(String(findValByKeys(['type', 'TYPE', 'category', 'Category', 'itemType', 'item_type']) || '').trim());
                 const imageUrlVal = cleanStr(String(findValByKeys(['image', 'IMAGE', 'imageUrl', 'image_url']) || '').trim());
 
                 await addDoc(collection(db, 'goods'), {
                   brand: brandVal,
+                  type: typeVal,
                   code: codeVal,
                   description: descVal,
                   dokhinkhan: dokhinkhanVal,
@@ -3756,7 +3784,11 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
         return (a.name || '').localeCompare(b.name || '');
       });
   }, [tiles]);
-  const activeGoods = useMemo(() => goods.filter(g => !g.deleted), [goods]);
+  const activeGoods = useMemo(() => {
+    return goods
+      .filter(g => !g.deleted)
+      .sort(compareGoodTypes);
+  }, [goods]);
   const activeTools = useMemo(() => tools.filter(t => !t.deleted), [tools]);
 
   const stockItemsList = useMemo(() => {
@@ -3811,7 +3843,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
       });
     }
     if (stockSubTab === 'goods') {
-      return baseList.filter(item => item.type === 'good');
+      return baseList.filter(item => item.type === 'good').sort((a, b) => compareGoodTypes(a as any, b as any));
     }
     return baseList;
   }, [activeTab, showSearchBox, searchQuery, filteredStockItems, stockItemsList, stockSubTab]);
@@ -3839,8 +3871,9 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
     return source.filter(g => 
       (g.code || '').toLowerCase().includes(q) || 
       (g.brand || '').toLowerCase().includes(q) ||
+      (g.type || '').toLowerCase().includes(q) ||
       (g.description || '').toLowerCase().includes(q)
-    );
+    ).sort(compareGoodTypes);
   }, [goods, activeGoods, searchQuery, activeTab]);
 
   const filteredTools = useMemo(() => {
@@ -3868,9 +3901,12 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
   }, [activeTab, showSearchBox, searchQuery, filteredTiles, activeTiles, tiles]);
 
   const rawDisplayGoods = useMemo(() => {
-    if (activeTab === 'search' || (showSearchBox && searchQuery.trim() !== '')) return filteredGoods;
-    if (activeTab === 'master' || activeTab === 'stock') return activeGoods;
-    return goods;
+    let source: Good[];
+    if (activeTab === 'search' || (showSearchBox && searchQuery.trim() !== '')) source = filteredGoods;
+    else if (activeTab === 'master' || activeTab === 'stock') source = activeGoods;
+    else source = goods;
+
+    return [...source].sort(compareGoodTypes);
   }, [activeTab, showSearchBox, searchQuery, filteredGoods, activeGoods, goods]);
 
   const rawDisplayTools = useMemo(() => {
@@ -6419,6 +6455,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                       </TableHeader>
                       <TableHeader align="center" className={cn(activeTab === 'search' && "bg-slate-200/50")}>SL</TableHeader>
                       <TableHeader align="center" className={cn(activeTab === 'search' && "bg-slate-200/50")}>Image</TableHeader>
+                      <TableHeader align="center" className={cn(activeTab === 'search' && "bg-slate-200/50")}>TYPE</TableHeader>
                       <TableHeader align="center" className={cn(activeTab === 'search' && "bg-slate-200/50")}>Brand</TableHeader>
                       <TableHeader align="center" className={cn(activeTab === 'search' && "bg-slate-200/50")}>Code</TableHeader>
                       <TableHeader className={cn(activeTab === 'search' && "bg-slate-200/50")}>Description</TableHeader>
@@ -6535,6 +6572,16 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                                 <Package className="w-6 h-6 text-gray-700" />
                               </div>
                             )}
+                          </TableCell>
+                          <TableCell align="center" className={cn("font-normal border-slate-300", isOutOfStock ? "text-red-950 font-semibold" : "text-gray-800")}>
+                            {isEditing ? (
+                              <textarea 
+                                className="w-full h-full min-h-[44px] px-4 py-3 bg-blue-50/50 border-2 border-transparent focus:border-blue-500 outline-none m-0 text-inherit text-sm resize-none rounded-none editing-input-active" 
+                                value={editData.type || ''} 
+                                onChange={e => setEditData({ ...editData, type: e.target.value })}
+                                onInput={e => { e.currentTarget.style.height = 'auto'; e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px'; }}
+                              />
+                            ) : (good.type || 'N/A')}
                           </TableCell>
                           <TableCell align="center" className={cn("font-normal border-slate-300", isOutOfStock ? "text-red-950 font-semibold" : "text-gray-800")}>
                             {isEditing ? (
@@ -6664,7 +6711,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     })}
                     {displayGoods.length === 0 && (
                       <tr>
-                        <td colSpan={13} className="px-4 py-12 text-center text-gray-500">
+                        <td colSpan={14} className="px-4 py-12 text-center text-gray-500">
                           No goods found.
                         </td>
                       </tr>
@@ -8671,6 +8718,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   {(showAddModal === 'goods' || editingItem?.category === 'goods') && (
                     <>
                       <Input label="Brand" name="brand" defaultValue={editingItem?.item.brand} placeholder="Brand name" list="uniqueBrands" options={uniqueBrands} />
+                      <Input label="Type" name="type" defaultValue={editingItem?.item.type} placeholder="Type (e.g. Basin, Commode)" />
                       <Input label="Code" name="code" required defaultValue={editingItem?.item.code} placeholder="XXXX-XXXX" />
                       <Input label="Description" name="description" defaultValue={editingItem?.item.description} className="sm:col-span-2" />
                       <Input label="Bonorupa 2 Qty" name="dokhinkhan" type="number" defaultValue={editingItem?.item.dokhinkhan} />

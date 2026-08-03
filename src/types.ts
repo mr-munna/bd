@@ -24,6 +24,7 @@ export interface Tile {
 export interface Good {
   id: string;
   brand: string;
+  type?: string;
   code: string;
   description: string;
   dokhinkhan: number;
