@@ -2419,6 +2419,46 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
     };
   }, [isAuthReady, user, currentUserDoc, isApproved]);
 
+  const formatItemQuantityStr = (data: any): string => {
+    if (!data) return '';
+    const parts: string[] = [];
+    
+    // Check SFT
+    let sftVal: number | null = null;
+    if (data.totalSft !== undefined && data.totalSft !== null && data.totalSft !== '') {
+      sftVal = Number(data.totalSft);
+    } else if (data.qtySft !== undefined && data.qtySft !== null && data.qtySft !== '') {
+      sftVal = Number(data.qtySft);
+    }
+    if (sftVal !== null && !isNaN(sftVal) && sftVal > 0) {
+      parts.push(`${sftVal} Sft`);
+    }
+
+    // Check PCS
+    let pcsVal: number | null = null;
+    if (data.totalPcs !== undefined && data.totalPcs !== null && data.totalPcs !== '') {
+      pcsVal = Number(data.totalPcs);
+    } else if (data.qtyPcs !== undefined && data.qtyPcs !== null && data.qtyPcs !== '') {
+      pcsVal = Number(data.qtyPcs);
+    } else if (data.qty !== undefined && data.qty !== null && data.qty !== '') {
+      pcsVal = Number(data.qty);
+    } else if (data.quantity !== undefined && data.quantity !== null && data.quantity !== '') {
+      pcsVal = Number(data.quantity);
+    } else if (data.dokhinkhan !== undefined || data.bonorupa !== undefined || data.banani !== undefined) {
+      const sum = (Number(data.dokhinkhan) || 0) + (Number(data.bonorupa) || 0) + (Number(data.banani) || 0);
+      if (sum > 0) pcsVal = sum;
+    } else if (data.diaBariPcs !== undefined || data.bonorupaPcs !== undefined || data.bananiPcs !== undefined || data.dokhinkhanPcs !== undefined) {
+      const sum = (Number(data.diaBariPcs) || 0) + (Number(data.bonorupaPcs) || 0) + (Number(data.bananiPcs) || 0) + (Number(data.dokhinkhanPcs) || 0);
+      if (sum > 0) pcsVal = sum;
+    }
+
+    if (pcsVal !== null && !isNaN(pcsVal) && pcsVal > 0) {
+      parts.push(`${pcsVal} Pcs`);
+    }
+
+    return parts.length > 0 ? parts.join(' / ') : '';
+  };
+
   const logActivity = async (
     action: ActivityLog['action'],
     itemType: ActivityLog['itemType'],
@@ -2557,7 +2597,13 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
       const itemName = (data as any)?.name || (data as any)?.code || (data as any)?.details || id;
       sendNotification('edit', category, itemName, data);
       await logPageChange(category);
-      await logActivity('edit', category === 'tiles' ? 'tile' : category === 'goods' ? 'good' : 'tool', `Edited product ${itemName}`, id, itemName);
+      const isBooked = category === 'bookedItems';
+      const itemType: ActivityLog['itemType'] = isBooked ? 'booking' : (category === 'tiles' ? 'tile' : category === 'goods' ? 'good' : category === 'tools' ? 'tool' : 'system');
+      const qtyStr = formatItemQuantityStr(data);
+      const detailsText = isBooked
+        ? `Updated booked item for client ${data.clientName || 'N/A'}: ${itemName}${qtyStr ? ` [Qty: ${qtyStr}]` : ''}`
+        : `Edited product ${itemName}${qtyStr ? ` [Qty: ${qtyStr}]` : ''}`;
+      await logActivity(isBooked ? 'book' : 'edit', itemType, detailsText, id, itemName);
     } catch (err: any) {
       console.error("Update error:", err);
       showStatus('error', `Failed to update item: ${err.message}`);
@@ -3610,12 +3656,16 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
           const isMaster = activeTab === 'master' || activeTab === 'master_sheet';
           const isAlreadyDeleted = (item as any)?.deleted;
 
+          const isBooked = collectionName === 'bookedItems';
+          const itemType: ActivityLog['itemType'] = isBooked ? 'booking' : (collectionName === 'tiles' ? 'tile' : collectionName === 'goods' ? 'good' : collectionName === 'tools' ? 'tool' : 'system');
+          const qtyStr = formatItemQuantityStr(item);
+
           if (isMaster && isAlreadyDeleted) {
             await deleteDoc(doc(db, collectionName, id));
             showStatus('success', 'Item permanently deleted from Master Sheet.');
             sendNotification('delete', collectionName, itemName, { id, permanent: true });
             await logPageChange(collectionName);
-            await logActivity('delete', collectionName === 'tiles' ? 'tile' : collectionName === 'goods' ? 'good' : collectionName === 'tools' ? 'tool' : 'booking', `Permanently deleted item ${itemName}`, id, itemName);
+            await logActivity('delete', itemType, `Permanently deleted item ${itemName}${qtyStr ? ` [Qty: ${qtyStr}]` : ''}`, id, itemName);
           } else {
             await updateDoc(doc(db, collectionName, id), { deleted: true });
             
@@ -3648,7 +3698,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
             showStatus('success', 'Item moved to Master Sheet (Deleted).');
             sendNotification('delete', collectionName, itemName, { id });
             await logPageChange(collectionName);
-            await logActivity('delete', collectionName === 'tiles' ? 'tile' : collectionName === 'goods' ? 'good' : collectionName === 'tools' ? 'tool' : 'booking', `Deleted item ${itemName} (Moved to Master Sheet)`, id, itemName);
+            await logActivity('delete', itemType, `Deleted item ${itemName}${qtyStr ? ` [Qty: ${qtyStr}]` : ''} (Moved to Master Sheet)`, id, itemName);
           }
         } catch (err: any) {
           console.error("Delete error:", err);
@@ -8817,10 +8867,16 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                         await updateDoc(doc(db, category, editingItem.item.id), data);
                         const itemName = (data as any)?.name || (data as any)?.code || (data as any)?.details || editingItem.item.id;
                         const isBooked = category === 'bookedItems';
+                        const itemType: ActivityLog['itemType'] = isBooked ? 'booking' : (category === 'tiles' ? 'tile' : category === 'goods' ? 'good' : category === 'tools' ? 'tool' : 'system');
+                        const qtyStr = formatItemQuantityStr(data);
+                        const detailsText = isBooked
+                          ? `Updated booking for client ${data.clientName || 'N/A'}: ${itemName}${qtyStr ? ` [Qty: ${qtyStr}]` : ''}`
+                          : `Edited product ${itemName}${qtyStr ? ` [Qty: ${qtyStr}]` : ''}`;
+
                         await logActivity(
                           isBooked ? 'book' : 'edit',
-                          isBooked ? 'booking' : (category === 'tiles' ? 'tile' : category === 'goods' ? 'good' : 'tool'),
-                          isBooked ? `Updated booking for client ${data.clientName || 'N/A'} (${itemName})` : `Edited product ${itemName}`,
+                          itemType,
+                          detailsText,
                           editingItem.item.id,
                           itemName
                         );
@@ -8829,10 +8885,16 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                         const docRef = await addDoc(collection(db, category), data);
                         const itemName = (data as any)?.name || (data as any)?.code || (data as any)?.details || docRef.id;
                         const isBooked = category === 'bookedItems';
+                        const itemType: ActivityLog['itemType'] = isBooked ? 'booking' : (category === 'tiles' ? 'tile' : category === 'goods' ? 'good' : category === 'tools' ? 'tool' : 'system');
+                        const qtyStr = formatItemQuantityStr(data);
+                        const detailsText = isBooked
+                          ? `Booked product ${itemName} for client ${data.clientName || 'N/A'}${qtyStr ? ` [Qty: ${qtyStr}]` : ''}`
+                          : `Added new product ${itemName}${qtyStr ? ` [Qty: ${qtyStr}]` : ''}`;
+
                         await logActivity(
                           isBooked ? 'book' : 'add',
-                          isBooked ? 'booking' : (category === 'tiles' ? 'tile' : category === 'goods' ? 'good' : 'tool'),
-                          isBooked ? `Booked product ${itemName} for client ${data.clientName || 'N/A'}` : `Added new product ${itemName}`,
+                          itemType,
+                          detailsText,
                           docRef.id,
                           itemName
                         );
