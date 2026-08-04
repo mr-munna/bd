@@ -78,6 +78,8 @@ import autoTable from 'jspdf-autotable';
 import { db, auth } from './firebase';
 import { Tile, Good, Tool, Category, BookedItem, Tab, UserRole, UserDoc, UserStatus, ActivityLog } from './types';
 import { ActivityLogManager } from './components/ActivityLogManager';
+import { InstallAppModal } from './components/InstallAppModal';
+import { Smartphone } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -1454,6 +1456,7 @@ export default function App() {
 
   const [showAddModal, setShowAddModal] = useState<Category | null>(null);
   const [editingItem, setEditingItem] = useState<{ category: Category; item: any } | null>(null);
+  const [showInstallModal, setShowInstallModal] = useState<boolean>(false);
 
   const uniqueBrands = useMemo(() => {
     const brands = new Set<string>();
@@ -1597,6 +1600,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
   const isApproved = !!user?.emailVerified && (isFullyApproved || ['landing', 'stock', 'home'].includes(activeTab));
 
   const [rolePermissions, setRolePermissions] = useState<Record<string, Record<string, boolean>>>({});
+  const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState<boolean>(true);
 
   // Firestore Snapshot listener for role based page on/off settings
   useEffect(() => {
@@ -1609,6 +1613,32 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
     });
     return unsub;
   }, []);
+
+  // Firestore Snapshot listener for email notification on/off setting
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'settings', 'email_notifications'), (docSnap) => {
+      if (docSnap.exists()) {
+        setEmailNotificationsEnabled(docSnap.data().enabled !== false);
+      } else {
+        setEmailNotificationsEnabled(true);
+      }
+    });
+    return unsub;
+  }, []);
+
+  const handleToggleEmailNotifications = async (enabled: boolean) => {
+    try {
+      await setDoc(doc(db, 'settings', 'email_notifications'), {
+        enabled,
+        updatedAt: new Date().toISOString(),
+        updatedBy: user?.email || 'Unknown'
+      });
+      showStatus('success', enabled ? 'Automatic member email notifications turned ON.' : 'Automatic member email notifications turned OFF.');
+    } catch (err: any) {
+      console.error("Error toggling email notifications:", err);
+      showStatus('error', 'Failed to update email notification setting.');
+    }
+  };
 
   const hasPagePermission = (role: string | undefined, pageKey: string): boolean => {
     const userRole = role || 'guest';
@@ -3607,6 +3637,10 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
   };
 
   const sendNotification = async (action: 'edit' | 'delete', category: string, itemName: string, details: any) => {
+    if (!emailNotificationsEnabled) {
+      console.log('Automatic email notifications are turned off by App Owner.');
+      return;
+    }
     try {
       const isMaster = activeTab === 'master' || activeTab === 'master_sheet';
       const approvedUsersEmails = users.filter(u => u.status === 'approved').map(u => u.email);
@@ -4559,30 +4593,40 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
               )}
             </nav>
             
-            {/* Sidebar Footer (Backup/Restore) */}
-            {isAdmin && (
-              <div className="p-4 border-t border-slate-800 space-y-2">
-                <button 
-                  onClick={handleBackup} 
-                  className="w-full px-4 py-3 rounded-xl font-medium flex items-center gap-3 uppercase tracking-wider text-xs text-slate-300 hover:bg-white/10 hover:text-white transition-all"
-                >
-                  <Download className="w-4 h-4" /> Backup Data
-                </button>
-                <div className="relative">
-                  <input
-                    type="file"
-                    accept=".json"
-                    onChange={handleRestore}
-                    className="absolute inset-0 opacity-0 cursor-pointer"
-                  />
+            {/* Sidebar Footer (App Download & Backup/Restore) */}
+            <div className="p-4 border-t border-slate-800 space-y-2">
+              <button 
+                onClick={() => setShowInstallModal(true)} 
+                className="w-full px-3.5 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-slate-950 text-xs shadow-md transition-all active:scale-95"
+              >
+                <Smartphone className="w-4 h-4" />
+                <span>Install App (ডাউনলোড)</span>
+              </button>
+
+              {isAdmin && (
+                <>
                   <button 
-                    className="w-full px-4 py-3 rounded-xl font-medium flex items-center gap-3 uppercase tracking-wider text-xs text-slate-300 hover:bg-white/10 hover:text-white transition-all text-left"
+                    onClick={handleBackup} 
+                    className="w-full px-4 py-2.5 rounded-xl font-medium flex items-center gap-3 uppercase tracking-wider text-xs text-slate-300 hover:bg-white/10 hover:text-white transition-all"
                   >
-                    <Upload className="w-4 h-4" /> Restore Data
+                    <Download className="w-4 h-4" /> Backup Data
                   </button>
-                </div>
-              </div>
-            )}
+                  <div className="relative">
+                    <input
+                      type="file"
+                      accept=".json"
+                      onChange={handleRestore}
+                      className="absolute inset-0 opacity-0 cursor-pointer"
+                    />
+                    <button 
+                      className="w-full px-4 py-2.5 rounded-xl font-medium flex items-center gap-3 uppercase tracking-wider text-xs text-slate-300 hover:bg-white/10 hover:text-white transition-all text-left"
+                    >
+                      <Upload className="w-4 h-4" /> Restore Data
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </aside>
         )}
 
@@ -4656,7 +4700,17 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
           </div>
 
           {/* Header Right (User Info & Actions) */}
-          <div className="flex items-center gap-3 ml-auto">
+          <div className="flex items-center gap-2 sm:gap-3 ml-auto">
+            <button
+              onClick={() => setShowInstallModal(true)}
+              className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-slate-950 font-extrabold text-xs flex items-center gap-1.5 shadow-sm transition-all active:scale-95 shrink-0"
+              title="Download App for iPhone & Android"
+            >
+              <Smartphone className="w-4 h-4" />
+              <span className="hidden sm:inline">Install App</span>
+              <span className="sm:hidden">App</span>
+            </button>
+
             {user ? (
               <div className="flex items-center gap-3">
                 <div className="hidden sm:flex flex-col items-end">
@@ -4849,6 +4903,15 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     <History className="w-5 h-5 text-emerald-600" /> Activity Logs
                   </button>
                 )}
+
+                <div className="h-px bg-gray-200 my-2" />
+
+                <button
+                  onClick={() => { setShowInstallModal(true); setIsMenuOpen(false); }}
+                  className="w-full px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2 bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 text-sm shadow-md"
+                >
+                  <Smartphone className="w-5 h-5" /> Install BAROBI App (ডাউনলোড)
+                </button>
                 {isAdmin && (
                   <>
                     <div className="h-px bg-gray-200 my-2" />
@@ -5817,6 +5880,68 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                 currentUser={user}
               />
 
+              {/* Automatic Member Email Notification Settings (App Owner Only) */}
+              {(user?.email === 'bijoymahmudmunna@gmail.com' || currentUserDoc?.role === 'supreme_admin') && (
+                <div className="bg-slate-900 rounded-3xl p-6 shadow-xl border border-slate-800 text-white space-y-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+                    <div className="flex items-start sm:items-center gap-3.5">
+                      <div className="p-3 bg-indigo-500/20 text-indigo-400 rounded-2xl border border-indigo-500/30 shrink-0">
+                        <Mail className="w-6 h-6" />
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="text-lg font-black text-white">
+                            Automatic Member Email Notifications (মেম্বার ইমেইল নোটিফিকেশন)
+                          </h3>
+                          <span className="text-[10px] uppercase tracking-wider font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2.5 py-0.5 rounded-full">
+                            App Owner Exclusive
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-300 leading-relaxed">
+                          প্রোডাক্ট বা বুকিং আইটেম এডিট অথবা ডিলিট করা হলে অনুমোদিত মেম্বারদের ইমেইলে নোটিফিকেশন মেল পাঠানো হবে কি না তা অন/অফ করার কন্ট্রোল।
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 bg-slate-800/90 px-4 py-3 rounded-2xl border border-slate-700 shrink-0 self-start sm:self-auto">
+                      <div className="text-right">
+                        <div className="text-xs font-bold text-white">
+                          {emailNotificationsEnabled ? 'Status: ENABLED (চালু)' : 'Status: DISABLED (বন্ধ)'}
+                        </div>
+                        <div className="text-[11px] text-slate-400">
+                          {emailNotificationsEnabled ? 'Emails sent on Edit / Delete' : 'No emails will be sent'}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleEmailNotifications(!emailNotificationsEnabled)}
+                        className={cn(
+                          "relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none shadow-inner",
+                          emailNotificationsEnabled ? "bg-emerald-500" : "bg-slate-600"
+                        )}
+                        title={emailNotificationsEnabled ? "Click to disable automatic emails" : "Click to enable automatic emails"}
+                      >
+                        <span
+                          className={cn(
+                            "pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out",
+                            emailNotificationsEnabled ? "translate-x-5" : "translate-x-0"
+                          )}
+                        />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-xs text-slate-300 bg-slate-800/50 px-4 py-2.5 rounded-xl border border-slate-800">
+                    <ShieldCheck className={cn("w-4 h-4 shrink-0", emailNotificationsEnabled ? "text-emerald-400" : "text-amber-400")} />
+                    <span>
+                      {emailNotificationsEnabled 
+                        ? 'অটোমেটিক ইমেইল সিস্টেম চালু আছে। যেকোনো এডিট/ডিলিট অ্যাকশনে মেম্বারদের নিকট নোটিফিকেশন মেইল যাবে।'
+                        : 'অটোমেটিক ইমেইল সিস্টেম বন্ধ রয়েছে। কোনো আইটেম এডিট বা ডিলিট করলেও মেম্বারদের মেইলে নোটিফিকেশন যাবে না।'}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {/* Email Configuration Test Section */}
               <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 space-y-4">
                 <div className="flex items-center gap-3 border-b border-gray-100 pb-4">
@@ -5872,6 +5997,8 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
               logs={activityLogs}
               isAppOwner={user?.email === 'bijoymahmudmunna@gmail.com' || currentUserDoc?.role === 'supreme_admin'}
               users={users}
+              emailNotificationsEnabled={emailNotificationsEnabled}
+              onToggleEmailNotifications={handleToggleEmailNotifications}
             />
           )}
 
@@ -9203,6 +9330,11 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
           </div>
         </div>
       </footer>
+      {/* Install App Modal for iPhone & Android */}
+      <InstallAppModal 
+        isOpen={showInstallModal} 
+        onClose={() => setShowInstallModal(false)} 
+      />
     </div>
     </div>
   </div>
