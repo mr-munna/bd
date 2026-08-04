@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { 
-  History, Search, Filter, Trash2, Clock, User, Shield, 
+  History, Search, Filter, Trash2, Clock, User, Shield, Mail,
   PlusCircle, Edit3, Trash, Bookmark, CheckCircle2, XCircle, 
   UserCheck, AlertCircle, RefreshCw, FileText, Layers, Calendar
 } from 'lucide-react';
@@ -13,12 +13,16 @@ interface ActivityLogManagerProps {
   isAppOwner: boolean;
   users: UserDoc[];
   onClearLogs?: () => void;
+  emailNotificationsEnabled?: boolean;
+  onToggleEmailNotifications?: (enabled: boolean) => void;
 }
 
 export const ActivityLogManager: React.FC<ActivityLogManagerProps> = ({
   logs,
   isAppOwner,
   users,
+  emailNotificationsEnabled = true,
+  onToggleEmailNotifications,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedAction, setSelectedAction] = useState<string>('all');
@@ -269,7 +273,29 @@ export const ActivityLogManager: React.FC<ActivityLogManagerProps> = ({
             </p>
           </div>
 
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex flex-wrap items-center gap-3 shrink-0">
+            {onToggleEmailNotifications && (
+              <div className="flex items-center gap-2.5 bg-slate-800/90 px-3.5 py-2 rounded-xl border border-slate-700/80 text-xs">
+                <Mail className={`w-4 h-4 ${emailNotificationsEnabled ? 'text-emerald-400' : 'text-slate-400'}`} />
+                <span className="font-medium text-slate-200 hidden sm:inline">
+                  Member Email:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onToggleEmailNotifications(!emailNotificationsEnabled)}
+                  className={`px-2.5 py-1 rounded-lg font-bold text-[11px] uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+                    emailNotificationsEnabled 
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30' 
+                      : 'bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30'
+                  }`}
+                  title="Toggle automatic email notifications when products are edited or deleted"
+                >
+                  <span className={`w-2 h-2 rounded-full ${emailNotificationsEnabled ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
+                  {emailNotificationsEnabled ? 'ON (চালু)' : 'OFF (বন্ধ)'}
+                </button>
+              </div>
+            )}
+
             <button
               onClick={() => setShowConfirmClear(true)}
               disabled={logs.length === 0}
