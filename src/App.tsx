@@ -435,10 +435,10 @@ const Select = ({
       defaultValue={defaultValue}
       onChange={onChange}
       required={required}
-      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white"
+      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white text-slate-900 font-medium"
     >
       {options.map((opt, i) => (
-        <option key={i} value={opt.value}>
+        <option key={i} value={opt.value} className="text-slate-900 bg-white">
           {opt.label}
         </option>
       ))}
@@ -7501,15 +7501,15 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     </div>
                   )}
                   <div className="flex items-center gap-2">
-                    <label className="text-sm font-medium text-gray-600">Marketing:</label>
+                    <label className="text-sm font-medium text-gray-700">Marketing:</label>
                     <select 
                       value={marketingFilter}
                       onChange={(e) => setMarketingFilter(e.target.value)}
-                      className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                      className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white text-slate-900 font-semibold shadow-sm cursor-pointer"
                     >
-                      <option value="all">All Persons</option>
+                      <option value="all" className="text-slate-900 bg-white">All Persons</option>
                       {marketingPersons.map(person => (
-                        <option key={person} value={person}>{person}</option>
+                        <option key={person} value={person} className="text-slate-900 bg-white">{person}</option>
                       ))}
                     </select>
                   </div>

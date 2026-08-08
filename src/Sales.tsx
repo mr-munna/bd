@@ -1030,11 +1030,11 @@ export function SalesManager({
                                                 <select 
                                                     value={item.unit}
                                                     onChange={(e) => updateItem(item.id, 'unit', e.target.value as any)}
-                                                    className="w-full bg-transparent border-0 text-sm font-medium uppercase outline-none focus:ring-0 p-0 text-gray-600 cursor-pointer"
+                                                    className="w-full bg-transparent border-0 text-sm font-bold uppercase outline-none focus:ring-0 p-0 text-slate-800 cursor-pointer"
                                                 >
-                                                    <option value="pcs">PCS</option>
-                                                    <option value="sft">SFT</option>
-                                                    <option value="bx">BX</option>
+                                                    <option value="pcs" className="text-slate-900 bg-white">PCS</option>
+                                                    <option value="sft" className="text-slate-900 bg-white">SFT</option>
+                                                    <option value="bx" className="text-slate-900 bg-white">BX</option>
                                                 </select>
                                             </td>
                                             <td className="px-4 py-3">
