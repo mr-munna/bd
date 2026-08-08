@@ -97,8 +97,7 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
     operationType,
     path
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  console.warn('Firestore Operation/Network Warning: ', JSON.stringify(errInfo));
 }
 
 export const resolveUserDisplay = (
