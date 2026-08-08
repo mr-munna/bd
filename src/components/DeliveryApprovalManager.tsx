@@ -1663,12 +1663,12 @@ Inventory Management System`;
                 <select
                   value={unit}
                   onChange={(e) => setUnit(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full px-3 py-2 bg-slate-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none text-slate-900 font-medium"
                 >
-                  <option value="pcs">Pcs (Pieces)</option>
-                  <option value="sft">Sft (Sqr Feet)</option>
-                  <option value="box">Box</option>
-                  <option value="set">Set</option>
+                  <option value="pcs" className="text-slate-900 bg-white">Pcs (Pieces)</option>
+                  <option value="sft" className="text-slate-900 bg-white">Sft (Sqr Feet)</option>
+                  <option value="box" className="text-slate-900 bg-white">Box</option>
+                  <option value="set" className="text-slate-900 bg-white">Set</option>
                 </select>
               </div>
             </div>
