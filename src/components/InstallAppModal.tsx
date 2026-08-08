@@ -5,9 +5,10 @@ import { Smartphone, Apple, Share, PlusSquare, Download, CheckCircle2, X, Globe,
 interface InstallAppModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onInstalled?: () => void;
 }
 
-export const InstallAppModal: React.FC<InstallAppModalProps> = ({ isOpen, onClose }) => {
+export const InstallAppModal: React.FC<InstallAppModalProps> = ({ isOpen, onClose, onInstalled }) => {
   const [deviceType, setDeviceType] = useState<'ios' | 'android' | 'desktop'>('android');
   const [activeTab, setActiveTab] = useState<'ios' | 'android'>('ios');
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -28,8 +29,16 @@ export const InstallAppModal: React.FC<InstallAppModalProps> = ({ isOpen, onClos
     }
 
     // Check if running as standalone (already installed)
-    if (window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone) {
+    const standaloneMode = 
+      window.matchMedia('(display-mode: standalone)').matches || 
+      window.matchMedia('(display-mode: fullscreen)').matches ||
+      window.matchMedia('(display-mode: minimal-ui)').matches ||
+      (navigator as any).standalone === true ||
+      localStorage.getItem('barobi_pwa_installed') === 'true';
+
+    if (standaloneMode) {
       setIsInstalled(true);
+      if (onInstalled) onInstalled();
     }
 
     // Listen for Chrome install prompt
@@ -38,11 +47,20 @@ export const InstallAppModal: React.FC<InstallAppModalProps> = ({ isOpen, onClos
       setDeferredPrompt(e);
     };
 
+    const handleAppInstalled = () => {
+      setIsInstalled(true);
+      localStorage.setItem('barobi_pwa_installed', 'true');
+      if (onInstalled) onInstalled();
+    };
+
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
+
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
     };
-  }, []);
+  }, [onInstalled]);
 
   const handleInstallClick = async () => {
     if (deferredPrompt) {
@@ -50,6 +68,8 @@ export const InstallAppModal: React.FC<InstallAppModalProps> = ({ isOpen, onClos
       const { outcome } = await deferredPrompt.userChoice;
       if (outcome === 'accepted') {
         setIsInstalled(true);
+        localStorage.setItem('barobi_pwa_installed', 'true');
+        if (onInstalled) onInstalled();
       }
       setDeferredPrompt(null);
     }
