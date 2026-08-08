@@ -1475,6 +1475,43 @@ export default function App() {
   const [showAddModal, setShowAddModal] = useState<Category | null>(null);
   const [editingItem, setEditingItem] = useState<{ category: Category; item: any } | null>(null);
   const [showInstallModal, setShowInstallModal] = useState<boolean>(false);
+  const [isAppInstalled, setIsAppInstalled] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return (
+      window.matchMedia('(display-mode: standalone)').matches ||
+      window.matchMedia('(display-mode: fullscreen)').matches ||
+      window.matchMedia('(display-mode: minimal-ui)').matches ||
+      (navigator as any).standalone === true ||
+      document.referrer.startsWith('android-app://') ||
+      localStorage.getItem('barobi_pwa_installed') === 'true'
+    );
+  });
+
+  useEffect(() => {
+    const handleAppInstalled = () => {
+      setIsAppInstalled(true);
+      localStorage.setItem('barobi_pwa_installed', 'true');
+    };
+
+    const mediaQuery = window.matchMedia('(display-mode: standalone)');
+    const handleDisplayModeChange = (e: MediaQueryListEvent) => {
+      if (e.matches) {
+        setIsAppInstalled(true);
+      }
+    };
+
+    window.addEventListener('appinstalled', handleAppInstalled);
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', handleDisplayModeChange);
+    }
+
+    return () => {
+      window.removeEventListener('appinstalled', handleAppInstalled);
+      if (mediaQuery.removeEventListener) {
+        mediaQuery.removeEventListener('change', handleDisplayModeChange);
+      }
+    };
+  }, []);
 
   const uniqueBrands = useMemo(() => {
     const brands = new Set<string>();
@@ -4623,13 +4660,15 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
             
             {/* Sidebar Footer (App Download & Backup/Restore) */}
             <div className="p-4 border-t border-slate-800 space-y-2">
-              <button 
-                onClick={() => setShowInstallModal(true)} 
-                className="w-full px-3.5 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-slate-950 text-xs shadow-md transition-all active:scale-95"
-              >
-                <Smartphone className="w-4 h-4" />
-                <span>Install App (ডাউনলোড)</span>
-              </button>
+              {!isAppInstalled && (
+                <button 
+                  onClick={() => setShowInstallModal(true)} 
+                  className="w-full px-3.5 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-slate-950 text-xs shadow-md transition-all active:scale-95"
+                >
+                  <Smartphone className="w-4 h-4" />
+                  <span>Install App (ডাউনলোড)</span>
+                </button>
+              )}
 
               {isAdmin && (
                 <>
@@ -4729,15 +4768,17 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
 
           {/* Header Right (User Info & Actions) */}
           <div className="flex items-center gap-2 sm:gap-3 ml-auto">
-            <button
-              onClick={() => setShowInstallModal(true)}
-              className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-slate-950 font-extrabold text-xs flex items-center gap-1.5 shadow-sm transition-all active:scale-95 shrink-0"
-              title="Download App for iPhone & Android"
-            >
-              <Smartphone className="w-4 h-4" />
-              <span className="hidden sm:inline">Install App</span>
-              <span className="sm:hidden">App</span>
-            </button>
+            {!isAppInstalled && (
+              <button
+                onClick={() => setShowInstallModal(true)}
+                className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-slate-950 font-extrabold text-xs flex items-center gap-1.5 shadow-sm transition-all active:scale-95 shrink-0"
+                title="Download App for iPhone & Android"
+              >
+                <Smartphone className="w-4 h-4" />
+                <span className="hidden sm:inline">Install App</span>
+                <span className="sm:hidden">App</span>
+              </button>
+            )}
 
             {user ? (
               <div className="flex items-center gap-3">
@@ -4932,14 +4973,17 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   </button>
                 )}
 
-                <div className="h-px bg-gray-200 my-2" />
-
-                <button
-                  onClick={() => { setShowInstallModal(true); setIsMenuOpen(false); }}
-                  className="w-full px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2 bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 text-sm shadow-md"
-                >
-                  <Smartphone className="w-5 h-5" /> Install BAROBI App (ডাউনলোড)
-                </button>
+                {!isAppInstalled && (
+                  <>
+                    <div className="h-px bg-gray-200 my-2" />
+                    <button
+                      onClick={() => { setShowInstallModal(true); setIsMenuOpen(false); }}
+                      className="w-full px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2 bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 text-sm shadow-md"
+                    >
+                      <Smartphone className="w-5 h-5" /> Install BAROBI App (ডাউনলোড)
+                    </button>
+                  </>
+                )}
                 {isAdmin && (
                   <>
                     <div className="h-px bg-gray-200 my-2" />
@@ -9361,7 +9405,8 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
       {/* Install App Modal for iPhone & Android */}
       <InstallAppModal 
         isOpen={showInstallModal} 
-        onClose={() => setShowInstallModal(false)} 
+        onClose={() => setShowInstallModal(false)}
+        onInstalled={() => setIsAppInstalled(true)}
       />
     </div>
     </div>
