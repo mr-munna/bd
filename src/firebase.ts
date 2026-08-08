@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import firebaseConfigLocal from '../firebase-applet-config.json';
 
 const firebaseConfig = {
@@ -14,5 +14,14 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+
+const dbId = firebaseConfig.firestoreDatabaseId || '(default)';
+
+// Initialize Firestore with auto long-polling fallback for mobile data / cellular networks and multi-tab local cache
+export const db = initializeFirestore(app, {
+  experimentalAutoDetectLongPolling: true,
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+}, dbId);
+
 export const auth = getAuth(app);
+

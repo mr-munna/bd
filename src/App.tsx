@@ -217,20 +217,27 @@ function handleFirestoreError(error: any, operationType: OperationType, path: st
     },
     operationType,
     path
-  }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  };
+  console.warn('Firestore Operation/Network Warning: ', JSON.stringify(errInfo));
 }
 
-class ErrorBoundary extends Component<any, any> {
-  state: any;
-  props: any;
-  constructor(props: any) {
+interface ErrorBoundaryProps {
+  children?: React.ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { hasError: false, error: null };
+
+  constructor(props: ErrorBoundaryProps) {
     super(props);
-    this.state = { hasError: false, error: null };
   }
 
-  static getDerivedStateFromError(error: Error) {
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error };
   }
 
@@ -243,28 +250,39 @@ class ErrorBoundary extends Component<any, any> {
       let message = "Something went wrong.";
       try {
         const parsed = JSON.parse(this.state.error?.message || "");
-        if (parsed.error) message = `Firestore Error: ${parsed.error}`;
+        if (parsed.error) message = `Network / Firestore Issue: ${parsed.error}`;
       } catch (e) {
         message = this.state.error?.message || message;
       }
 
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-          <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
-            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <X className="w-8 h-8 text-red-600" />
+        <div className="min-h-screen flex items-center justify-center bg-slate-900 p-4 text-white">
+          <div className="max-w-md w-full bg-slate-800 rounded-2xl shadow-xl p-8 text-center border border-slate-700">
+            <div className="w-16 h-16 bg-rose-500/20 text-rose-400 rounded-full flex items-center justify-center mx-auto mb-6 border border-rose-500/30">
+              <X className="w-8 h-8" />
             </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Application Error</h2>
-            <p className="text-gray-600 mb-8">{message}</p>
-            <Button onClick={() => window.location.reload()} variant="primary" className="w-full">
-              Reload Application
-            </Button>
+            <h2 className="text-2xl font-black text-white mb-2">Network Error (নেটওয়ার্ক সমস্যা)</h2>
+            <p className="text-slate-300 text-sm mb-6 leading-relaxed">{message}</p>
+            <div className="space-y-3">
+              <button 
+                onClick={() => (this as any).setState({ hasError: false, error: null })} 
+                className="w-full py-3 px-4 bg-teal-500 hover:bg-teal-600 text-slate-950 font-bold rounded-xl shadow transition-all"
+              >
+                Try Again (পুনরায় চেষ্টা করুন)
+              </button>
+              <button 
+                onClick={() => window.location.reload()} 
+                className="w-full py-2.5 px-4 bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold text-xs rounded-xl transition-all"
+              >
+                Refresh Page (পেজ রিফ্রেশ করুন)
+              </button>
+            </div>
           </div>
         </div>
       );
     }
 
-    return this.props.children;
+    return (this as any).props.children;
   }
 }
 
@@ -1610,6 +1628,8 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
       } else {
         setRolePermissions({});
       }
+    }, (err) => {
+      console.warn("role_permissions listener error (network):", err);
     });
     return unsub;
   }, []);
@@ -1622,6 +1642,8 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
       } else {
         setEmailNotificationsEnabled(true);
       }
+    }, (err) => {
+      console.warn("email_notifications listener error (network):", err);
     });
     return unsub;
   }, []);
@@ -1828,6 +1850,8 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
       if (doc.exists()) {
         setSidebarLinks(doc.data().links || []);
       }
+    }, (err) => {
+      console.warn("sidebar_links listener error (network):", err);
     });
     return () => unsub();
   }, [user, isApproved]);
@@ -2414,6 +2438,8 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
       } else {
         setLastMasterUpdate(null);
       }
+    }, (err) => {
+      console.warn("master_page_last_update listener error:", err);
     });
 
     const unsubBookedLog = onSnapshot(doc(db, 'settings', 'booked_page_last_update'), (snap) => {
@@ -2423,6 +2449,8 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
       } else {
         setLastBookedUpdate(null);
       }
+    }, (err) => {
+      console.warn("booked_page_last_update listener error:", err);
     });
 
     let unsubActivityLogs = () => {};

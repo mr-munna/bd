@@ -96,6 +96,9 @@ export function SalesManager({
     const unsub = onSnapshot(q, (snap) => {
       setSales(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sale)));
       setIsLoading(false);
+    }, (error) => {
+      console.warn("Sales list listener error (network):", error);
+      setIsLoading(false);
     });
     return unsub;
   }, []);
