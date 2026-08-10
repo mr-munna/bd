@@ -1469,8 +1469,12 @@ export default function App() {
   const [selectedTools, setSelectedTools] = useState<string[]>([]);
   const [selectedBookedItems, setSelectedBookedItems] = useState<string[]>([]);
   const [savedQuotes, setSavedQuotes] = useState<any[]>([]);
+  const [systemBackups, setSystemBackups] = useState<any[]>([]);
+  const [showBackupHistoryModal, setShowBackupHistoryModal] = useState<boolean>(false);
   const [lastMasterUpdate, setLastMasterUpdate] = useState<{ updatedAt: string; updatedBy: string } | null>(null);
   const [lastBookedUpdate, setLastBookedUpdate] = useState<{ updatedAt: string; updatedBy: string } | null>(null);
+  const autoBackupDateCheckedRef = useRef<string>('');
+  const isBackingUpRef = useRef<boolean>(false);
 
   const [showAddModal, setShowAddModal] = useState<Category | null>(null);
   const [editingItem, setEditingItem] = useState<{ category: Category; item: any } | null>(null);
@@ -1874,7 +1878,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
     { name: 'Facebook', url: 'https://www.facebook.com', icon: 'Globe' },
     { name: 'YouTube', url: 'https://www.youtube.com', icon: 'Globe' },
     { name: 'Pinterest', url: 'https://www.pinterest.com', icon: 'Globe' },
-    { name: 'BAROBI Website', url: 'https://mavxon.com', icon: 'Globe' }
+    { name: 'BAROBI Website', url: 'https://drafnex.vercel.app', icon: 'Globe' }
   ]);
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [newLinkName, setNewLinkName] = useState('');
@@ -2490,6 +2494,14 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
       console.warn("booked_page_last_update listener error:", err);
     });
 
+    const unsubBackups = onSnapshot(query(collection(db, 'system_backups')), (snap) => {
+      const docs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      docs.sort((a: any, b: any) => (b.timestamp || 0) - (a.timestamp || 0));
+      setSystemBackups(docs);
+    }, (err) => {
+      console.warn("system_backups listener error:", err);
+    });
+
     let unsubActivityLogs = () => {};
     const isOwner = user?.email === 'bijoymahmudmunna@gmail.com' || currentUserDoc?.role === 'supreme_admin';
     if (isOwner) {
@@ -2510,6 +2522,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
       unsubSavedQuotes();
       unsubMasterLog();
       unsubBookedLog();
+      unsubBackups();
       unsubActivityLogs();
     };
   }, [isAuthReady, user, currentUserDoc, isApproved]);
@@ -2999,6 +3012,232 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
     }
   };
 
+  // Automatic daily backup logic for Master Sheet (Runs at midnight or on first load after calendar change)
+  const runDailyAutoBackup = async () => {
+    if (!isApproved || (!isSuperAdmin && !isSupremeAdmin) || isBackingUpRef.current) return;
+    const now = new Date();
+    // Get YYYY-MM-DD in local time
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const todayDateStr = `${year}-${month}-${day}`;
+
+    if (autoBackupDateCheckedRef.current === todayDateStr) return;
+
+    // Document ID for today's backup in system_backups collection
+    const backupDocId = `backup_${todayDateStr}`;
+
+    try {
+      isBackingUpRef.current = true;
+      // Check if today's backup already exists
+      const backupDocRef = doc(db, 'system_backups', backupDocId);
+      const backupSnap = await getDoc(backupDocRef);
+
+      autoBackupDateCheckedRef.current = todayDateStr;
+
+      if (!backupSnap.exists()) {
+        console.log(`[AutoBackup] Creating automatic daily backup for ${todayDateStr}...`);
+
+        // Fetch delivery approvals snapshot
+        const deliverySnapshot = await getDocs(collection(db, 'delivery_approvals'));
+        const deliveryApprovals = deliverySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+
+        let masterSheetBackupData: any = {
+          tiles,
+          goods,
+          tools,
+          bookedItems,
+          savedQuotes,
+          deliveryApprovals,
+          backupDate: todayDateStr,
+          createdAt: now.toISOString(),
+          timestamp: now.getTime()
+        };
+
+        // Ensure payload size stays safely under Firestore 1MB document limit (< 900KB)
+        let strData = JSON.stringify(masterSheetBackupData);
+        if (strData.length > 900000) {
+          console.warn("[AutoBackup] Backup size nearing 1MB limit. Compacting deliveryApprovals and savedQuotes...");
+          masterSheetBackupData.savedQuotes = (savedQuotes || []).slice(0, 50);
+          masterSheetBackupData.deliveryApprovals = (deliveryApprovals || []).slice(0, 50);
+        }
+
+        // Save today's backup to Firestore
+        await setDoc(backupDocRef, {
+          backupDate: todayDateStr,
+          createdAt: now.toISOString(),
+          timestamp: now.getTime(),
+          data: masterSheetBackupData
+        });
+
+        // Maintain strict 7-day rolling window (delete backups older than 7 records)
+        const allBackupsSnap = await getDocs(collection(db, 'system_backups'));
+        const backupDocs = allBackupsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        backupDocs.sort((a: any, b: any) => (b.timestamp || 0) - (a.timestamp || 0));
+
+        if (backupDocs.length > 7) {
+          const docsToDelete = backupDocs.slice(7);
+          for (const oldDoc of docsToDelete) {
+            console.log(`[AutoBackup] Deleting old backup beyond 7 days limit: ${oldDoc.id}`);
+            await deleteDoc(doc(db, 'system_backups', oldDoc.id));
+          }
+        }
+      }
+    } catch (err) {
+      console.error("[AutoBackup] Failed to check/create automatic daily backup:", err);
+    } finally {
+      isBackingUpRef.current = false;
+    }
+  };
+
+  // Effect to trigger daily backup check when data/auth is ready, and schedule interval at midnight
+  useEffect(() => {
+    if (!isAuthReady || !user || !isApproved || (!isSuperAdmin && !isSupremeAdmin)) return;
+
+    // Run immediately when loaded
+    runDailyAutoBackup();
+
+    // Check periodically every 15 minutes or near midnight
+    const interval = setInterval(() => {
+      runDailyAutoBackup();
+    }, 15 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [isAuthReady, user, isApproved, isSuperAdmin, isSupremeAdmin]);
+
+  const performDataRestore = async (data: any) => {
+    try {
+      const ops: Array<(b: any) => void> = [];
+
+      // Generic clean utility which excludes undefined, null, and empty string sizes on numeric fields
+      const cleanObj = (obj: any, numericFields: string[]) => {
+        const res: any = {};
+        Object.keys(obj).forEach(key => {
+          if (key === 'id') return;
+          const val = obj[key];
+          if (val === undefined || val === null) return;
+
+          if (numericFields.includes(key)) {
+            // If numeric, make sure it is a real number
+            const num = Number(val);
+            if (!isNaN(num)) {
+              res[key] = num;
+            }
+          } else if (typeof val === 'string') {
+            // Ensure string values are trimmed
+            res[key] = val.trim();
+          } else if (typeof val === 'boolean') {
+            res[key] = val;
+          } else {
+            res[key] = val;
+          }
+        });
+        return res;
+      };
+      
+      // Restore Inventory Items
+      if (data.tiles && Array.isArray(data.tiles)) {
+        data.tiles.forEach((t: any) => {
+          const cleaned = cleanObj(t, [
+            'totalSft', 'totalPcs', 'diaBariSft', 'diaBariPcs',
+            'bonorupaSft', 'bonorupaPcs', 'bananiSft', 'bananiPcs',
+            'dokhinkhanSft', 'dokhinkhanPcs'
+          ]);
+          cleaned.name = String(cleaned.name || 'Tile');
+          cleaned.brand = String(cleaned.brand || 'Generic');
+          const docRef = doc(collection(db, 'tiles'));
+          ops.push((b) => b.set(docRef, { ...cleaned, createdAt: new Date() }));
+        });
+      }
+      if (data.goods && Array.isArray(data.goods)) {
+        data.goods.forEach((g: any) => {
+          const cleaned = cleanObj(g, ['dokhinkhan', 'bonorupa', 'banani']);
+          cleaned.code = String(cleaned.code || 'CODE');
+          const docRef = doc(collection(db, 'goods'));
+          ops.push((b) => b.set(docRef, { ...cleaned, createdAt: new Date() }));
+        });
+      }
+      if (data.tools && Array.isArray(data.tools)) {
+        data.tools.forEach((t: any) => {
+          const cleaned = cleanObj(t, ['qty']);
+          cleaned.details = String(cleaned.details || 'Tool');
+          cleaned.qty = Number(cleaned.qty ?? 0);
+          const docRef = doc(collection(db, 'tools'));
+          ops.push((b) => b.set(docRef, { ...cleaned, createdAt: new Date() }));
+        });
+      }
+      if (data.bookedItems && Array.isArray(data.bookedItems)) {
+        data.bookedItems.forEach((b: any) => {
+          const cleaned = cleanObj(b, ['qtySft', 'qtyPcs']);
+          cleaned.name = String(cleaned.name || 'Booked Item');
+          cleaned.code = String(cleaned.code || 'CODE');
+          cleaned.clientName = String(cleaned.clientName || 'Client');
+          const docRef = doc(collection(db, 'bookedItems'));
+          ops.push((b) => b.set(docRef, { ...cleaned, createdAt: new Date() }));
+        });
+      }
+
+      // Restore Saved Quotes
+      if (data.savedQuotes && Array.isArray(data.savedQuotes)) {
+        data.savedQuotes.forEach((q: any) => {
+          const cleaned = cleanObj(q, []);
+          const docRef = doc(collection(db, 'savedQuotes'));
+          ops.push((b) => b.set(docRef, { ...cleaned, createdAt: new Date() }));
+        });
+      }
+
+      // Restore Delivery Approvals
+      if (data.deliveryApprovals && Array.isArray(data.deliveryApprovals)) {
+        data.deliveryApprovals.forEach((da: any) => {
+          const cleaned = cleanObj(da, []);
+          if (da.items) {
+            cleaned.items = da.items;
+          }
+          const docRef = doc(collection(db, 'delivery_approvals'));
+          ops.push((b) => b.set(docRef, {
+            ...cleaned,
+            createdAt: da.createdAt || new Date().toISOString()
+          }));
+        });
+      }
+
+      // Restore Settings
+      if (data.sidebarLinks) {
+        const docRef = doc(db, 'settings', 'sidebar_links');
+        ops.push((b) => b.set(docRef, { links: data.sidebarLinks }));
+      }
+      if (data.quoteHeader || data.quoteTerms || data.quoteSignature || data.quoteFooter || data.quoteColumns) {
+        const quoteSettings: any = {};
+        if (data.quoteHeader) quoteSettings.header = data.quoteHeader;
+        if (data.quoteTerms) quoteSettings.terms = data.quoteTerms;
+        if (data.quoteSignature) quoteSettings.signature = data.quoteSignature;
+        if (data.quoteFooter) quoteSettings.footer = data.quoteFooter;
+        if (data.quoteColumns) quoteSettings.columns = data.quoteColumns;
+        const docRef = doc(db, 'settings', 'quote');
+        ops.push((b) => b.set(docRef, quoteSettings));
+      }
+
+      // Execute operations in chunks of 400 to respect Firestore 500-batch limit
+      const CHUNK_SIZE = 400;
+      for (let i = 0; i < ops.length; i += CHUNK_SIZE) {
+        const chunkBatch = writeBatch(db);
+        const chunk = ops.slice(i, i + CHUNK_SIZE);
+        chunk.forEach((op) => op(chunkBatch));
+        await chunkBatch.commit();
+      }
+
+      await logPageChange('tiles');
+      await logPageChange('bookedItems');
+      showStatus('success', 'DATA RESTORED SUCCESSFULLY.');
+    } catch (err: any) {
+      console.error("Restore error:", err);
+      showStatus('error', `RESTORE FAILED: ${err.message}`);
+    }
+  };
+
   const handleRestore = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -3012,115 +3251,10 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
         reader.onload = async (evt) => {
           try {
             const data = JSON.parse(evt.target?.result as string);
-            const batch = writeBatch(db);
-
-            // Generic clean utility which excludes undefined, null, and empty string sizes on numeric fields
-            const cleanObj = (obj: any, numericFields: string[]) => {
-              const res: any = {};
-              Object.keys(obj).forEach(key => {
-                if (key === 'id') return;
-                const val = obj[key];
-                if (val === undefined || val === null) return;
-
-                if (numericFields.includes(key)) {
-                  // If numeric, make sure it is a real number
-                  const num = Number(val);
-                  if (!isNaN(num)) {
-                    res[key] = num;
-                  }
-                } else if (typeof val === 'string') {
-                  // Ensure string values are trimmed
-                  res[key] = val.trim();
-                } else if (typeof val === 'boolean') {
-                  res[key] = val;
-                } else {
-                  res[key] = val;
-                }
-              });
-              return res;
-            };
-            
-            // Restore Inventory Items
-            if (data.tiles) {
-              data.tiles.forEach((t: any) => {
-                const cleaned = cleanObj(t, [
-                  'totalSft', 'totalPcs', 'diaBariSft', 'diaBariPcs',
-                  'bonorupaSft', 'bonorupaPcs', 'bananiSft', 'bananiPcs',
-                  'dokhinkhanSft', 'dokhinkhanPcs'
-                ]);
-                cleaned.name = String(cleaned.name || 'Tile');
-                cleaned.brand = String(cleaned.brand || 'Generic');
-                batch.set(doc(collection(db, 'tiles')), { ...cleaned, createdAt: new Date() });
-              });
-            }
-            if (data.goods) {
-              data.goods.forEach((g: any) => {
-                const cleaned = cleanObj(g, ['dokhinkhan', 'bonorupa', 'banani']);
-                cleaned.code = String(cleaned.code || 'CODE');
-                batch.set(doc(collection(db, 'goods')), { ...cleaned, createdAt: new Date() });
-              });
-            }
-            if (data.tools) {
-              data.tools.forEach((t: any) => {
-                const cleaned = cleanObj(t, ['qty']);
-                cleaned.details = String(cleaned.details || 'Tool');
-                cleaned.qty = Number(cleaned.qty ?? 0);
-                batch.set(doc(collection(db, 'tools')), { ...cleaned, createdAt: new Date() });
-              });
-            }
-            if (data.bookedItems) {
-              data.bookedItems.forEach((b: any) => {
-                const cleaned = cleanObj(b, ['qtySft', 'qtyPcs']);
-                cleaned.name = String(cleaned.name || 'Booked Item');
-                cleaned.code = String(cleaned.code || 'CODE');
-                cleaned.clientName = String(cleaned.clientName || 'Client');
-                batch.set(doc(collection(db, 'bookedItems')), { ...cleaned, createdAt: new Date() });
-              });
-            }
-
-            // Restore Saved Quotes
-            if (data.savedQuotes) {
-              data.savedQuotes.forEach((q: any) => {
-                const cleaned = cleanObj(q, []);
-                batch.set(doc(collection(db, 'savedQuotes')), { ...cleaned, createdAt: new Date() });
-              });
-            }
-
-            // Restore Delivery Approvals
-            if (data.deliveryApprovals) {
-              data.deliveryApprovals.forEach((da: any) => {
-                const cleaned = cleanObj(da, []);
-                if (da.items) {
-                  cleaned.items = da.items;
-                }
-                batch.set(doc(collection(db, 'delivery_approvals')), {
-                  ...cleaned,
-                  createdAt: da.createdAt || new Date().toISOString()
-                });
-              });
-            }
-
-            // Restore Settings
-            if (data.sidebarLinks) {
-              batch.set(doc(db, 'settings', 'sidebar_links'), { links: data.sidebarLinks });
-            }
-            if (data.quoteHeader || data.quoteTerms || data.quoteSignature || data.quoteFooter || data.quoteColumns) {
-              const quoteSettings: any = {};
-              if (data.quoteHeader) quoteSettings.header = data.quoteHeader;
-              if (data.quoteTerms) quoteSettings.terms = data.quoteTerms;
-              if (data.quoteSignature) quoteSettings.signature = data.quoteSignature;
-              if (data.quoteFooter) quoteSettings.footer = data.quoteFooter;
-              if (data.quoteColumns) quoteSettings.columns = data.quoteColumns;
-              batch.set(doc(db, 'settings', 'quote'), quoteSettings);
-            }
-
-            await batch.commit();
-            await logPageChange('tiles');
-            await logPageChange('bookedItems');
-            showStatus('success', 'DATA RESTORED SUCCESSFULLY.');
+            await performDataRestore(data);
           } catch (err: any) {
-            console.error("Restore error:", err);
-            showStatus('error', `RESTORE FAILED: ${err.message}`);
+            console.error("Parse error:", err);
+            showStatus('error', `INVALID BACKUP FILE: ${err.message}`);
           }
         };
         reader.readAsText(file);
@@ -4658,15 +4792,17 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
               )}
             </nav>
             
-            {/* Sidebar Footer (App Download & Backup/Restore) */}
+            {/* Sidebar Footer (Backup/Restore) */}
             <div className="p-4 border-t border-slate-800 space-y-2">
-              {!isAppInstalled && (
+              {(isSuperAdmin || isSupremeAdmin) && (
                 <button 
-                  onClick={() => setShowInstallModal(true)} 
-                  className="w-full px-3.5 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-slate-950 text-xs shadow-md transition-all active:scale-95"
+                  onClick={() => setShowBackupHistoryModal(true)} 
+                  className="w-full px-4 py-2.5 rounded-xl font-medium flex items-center justify-between uppercase tracking-wider text-xs text-amber-400 hover:bg-amber-400/10 transition-all border border-amber-500/30"
                 >
-                  <Smartphone className="w-4 h-4" />
-                  <span>Install App (ডাউনলোড)</span>
+                  <span className="flex items-center gap-2">
+                    <History className="w-4 h-4 text-amber-400" /> Auto Backups (7 Days)
+                  </span>
+                  <span className="bg-amber-500/20 text-amber-300 text-[10px] px-2 py-0.5 rounded-full font-mono">{systemBackups.length}</span>
                 </button>
               )}
 
@@ -4676,7 +4812,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     onClick={handleBackup} 
                     className="w-full px-4 py-2.5 rounded-xl font-medium flex items-center gap-3 uppercase tracking-wider text-xs text-slate-300 hover:bg-white/10 hover:text-white transition-all"
                   >
-                    <Download className="w-4 h-4" /> Backup Data
+                    <Download className="w-4 h-4" /> Download Manual Backup
                   </button>
                   <div className="relative">
                     <input
@@ -4973,14 +5109,17 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   </button>
                 )}
 
-                {!isAppInstalled && (
+                {(isSuperAdmin || isSupremeAdmin) && (
                   <>
                     <div className="h-px bg-gray-200 my-2" />
-                    <button
-                      onClick={() => { setShowInstallModal(true); setIsMenuOpen(false); }}
-                      className="w-full px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2 bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 text-sm shadow-md"
+                    <button 
+                      onClick={() => { setShowBackupHistoryModal(true); setIsMenuOpen(false); }} 
+                      className="w-full px-4 py-3 rounded-xl font-medium flex items-center justify-between uppercase tracking-wider text-xs bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200"
                     >
-                      <Smartphone className="w-5 h-5" /> Install BAROBI App (ডাউনলোড)
+                      <span className="flex items-center gap-3">
+                        <History className="w-5 h-5 text-amber-600" /> Auto Backups (7 Days)
+                      </span>
+                      <span className="bg-amber-200 text-amber-900 text-xs px-2 py-0.5 rounded-full font-bold">{systemBackups.length}</span>
                     </button>
                   </>
                 )}
@@ -4991,7 +5130,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                       onClick={handleBackup} 
                       className="w-full px-4 py-3 rounded-xl font-medium flex items-center gap-3 uppercase tracking-wider text-xs text-gray-500 hover:bg-gray-50"
                     >
-                      <Download className="w-5 h-5" /> BACKUP DATA
+                      <Download className="w-5 h-5" /> DOWNLOAD MANUAL BACKUP
                     </button>
                     <div className="relative">
                       <input
@@ -9392,7 +9531,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
               Developed by <span className="font-semibold text-white">Bijoy Mahmud Munna</span>
             </div>
             <div className="flex-1 text-center font-medium flex items-center justify-center gap-4">
-              <a href="https://www.facebook.com/mavxon" target="_blank" rel="noopener noreferrer" className="hover:text-[#FBBF24] transition-colors">www.mavxon.com</a>
+              <a href="https://drafnex.vercel.app" target="_blank" rel="noopener noreferrer" className="hover:text-[#FBBF24] transition-colors">Visit my website</a>
               <span className="text-gray-700">|</span>
               <a href="mailto:Bijoy.mm112@gmail.com" className="hover:text-[#3B82F6] transition-colors">Bijoy.mm112@gmail.com</a>
             </div>
@@ -9408,6 +9547,157 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
         onClose={() => setShowInstallModal(false)}
         onInstalled={() => setIsAppInstalled(true)}
       />
+
+      {/* Auto Backups History Modal (7 Days Retention) */}
+      <AnimatePresence>
+        {showBackupHistoryModal && (isSuperAdmin || isSupremeAdmin) && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-slate-900 border border-slate-800 text-white rounded-2xl w-full max-w-3xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]"
+            >
+              {/* Header */}
+              <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/80">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                    <History className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                      Master Sheet Automatic Daily Backups
+                      <span className="text-xs bg-amber-500/20 text-amber-300 font-semibold px-2 py-0.5 rounded-full border border-amber-500/30">
+                        7-Day Retention
+                      </span>
+                    </h2>
+                    <p className="text-xs text-slate-400">
+                      Automatic daily backup generated every day at midnight with maximum 7 days history retention.
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowBackupHistoryModal(false)}
+                  className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-5 overflow-y-auto space-y-4 flex-1">
+                {systemBackups.length === 0 ? (
+                  <div className="py-12 text-center text-slate-400 space-y-3">
+                    <History className="w-12 h-12 mx-auto text-slate-600 animate-pulse" />
+                    <p className="text-sm font-medium">No automatic backup files available yet.</p>
+                    <p className="text-xs text-slate-500">
+                      Backups will automatically generate when the calendar date changes or at midnight.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid gap-3 sm:grid-cols-1">
+                    {systemBackups.map((item, idx) => {
+                      const isToday = item.backupDate === new Date().toISOString().split('T')[0];
+                      const totalTiles = item.data?.tiles?.length || 0;
+                      const totalGoods = item.data?.goods?.length || 0;
+                      const totalTools = item.data?.tools?.length || 0;
+                      const totalBooked = item.data?.bookedItems?.length || 0;
+                      const totalQuotes = item.data?.savedQuotes?.length || 0;
+
+                      return (
+                        <div 
+                          key={item.id} 
+                          className={cn(
+                            "p-4 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4",
+                            isToday 
+                              ? "bg-amber-950/20 border-amber-500/40 hover:border-amber-500/70" 
+                              : "bg-slate-800/40 border-slate-700/60 hover:bg-slate-800/80"
+                          )}
+                        >
+                          <div className="space-y-1.5">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-sm font-bold text-amber-300">
+                                {item.backupDate}
+                              </span>
+                              {isToday && (
+                                <span className="bg-emerald-500/20 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-500/30">
+                                  Today's Backup
+                                </span>
+                              )}
+                              <span className="text-[10px] text-slate-500">
+                                (# Record {idx + 1} of {systemBackups.length})
+                              </span>
+                            </div>
+
+                            <div className="text-xs text-slate-400 flex flex-wrap items-center gap-3">
+                              <span>Time: <strong className="text-slate-200">{new Date(item.createdAt).toLocaleTimeString()}</strong></span>
+                              <span>•</span>
+                              <span>Tiles: <strong className="text-amber-400">{totalTiles}</strong></span>
+                              <span>Goods: <strong className="text-amber-400">{totalGoods}</strong></span>
+                              <span>Tools: <strong className="text-amber-400">{totalTools}</strong></span>
+                              <span>Booked: <strong className="text-amber-400">{totalBooked}</strong></span>
+                              <span>Quotes: <strong className="text-amber-400">{totalQuotes}</strong></span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => {
+                                setConfirmAction({
+                                  title: 'RESTORE BACKUP RECORD',
+                                  message: `Are you sure you want to restore all data from ${item.backupDate}? This will update current Master Sheet items.`,
+                                  type: 'warning',
+                                  onConfirm: async () => {
+                                    await performDataRestore(item.data);
+                                    setShowBackupHistoryModal(false);
+                                    setConfirmAction(null);
+                                  }
+                                });
+                              }}
+                              className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95"
+                            >
+                              <Upload className="w-3.5 h-3.5" /> Restore
+                            </button>
+                            <button
+                              onClick={() => {
+                                const blob = new Blob([JSON.stringify(item.data, null, 2)], { type: 'application/json' });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `barobi_autobackup_${item.backupDate}.json`;
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                                URL.revokeObjectURL(url);
+                                showStatus('success', `Backup file for ${item.backupDate} downloaded successfully.`);
+                              }}
+                              className="px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95"
+                            >
+                              <Download className="w-3.5 h-3.5" /> Download
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="p-4 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between text-xs text-slate-400">
+                <span>Older backups beyond 7 days are automatically purged.</span>
+                <Button 
+                  onClick={() => setShowBackupHistoryModal(false)}
+                  variant="secondary"
+                  size="sm"
+                >
+                  Close
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
     </div>
   </div>
