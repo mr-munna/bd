@@ -396,12 +396,12 @@ const Input = ({
       required={required}
       step={step}
       list={list}
-      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white"
+      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white text-slate-900 font-medium placeholder:text-gray-400"
     />
     {list && options && (
       <datalist id={list}>
         {options.map((opt, i) => (
-          <option key={i} value={opt} />
+          <option key={i} value={opt} className="text-slate-900 bg-white" />
         ))}
       </datalist>
     )}
@@ -9163,7 +9163,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                             <input 
                               type="text"
                               placeholder="Search by name, code or brand..."
-                              className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                              className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-slate-900 font-medium placeholder:text-gray-400 bg-white"
                               value={bookSearchQuery}
                               onChange={(e) => setBookSearchQuery(e.target.value)}
                               autoFocus
