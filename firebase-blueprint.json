@@ -245,6 +245,18 @@
         "details": { "type": "string" }
       },
       "required": ["timestamp", "userEmail", "action", "details"]
+    },
+    "SystemBackup": {
+      "title": "SystemBackup",
+      "description": "Automated daily snapshot of master data with 7-day rolling retention.",
+      "type": "object",
+      "properties": {
+        "backupDate": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "data": { "type": "object" }
+      },
+      "required": ["backupDate", "createdAt", "timestamp"]
     }
   },
   "firestore": {
@@ -291,6 +303,10 @@
     "/activity_logs": {
       "schema": "ActivityLog",
       "description": "User operation history and audit logs"
+    },
+    "/system_backups": {
+      "schema": "SystemBackup",
+      "description": "Automated daily master sheet backups with 7 days retention"
     }
   }
 }

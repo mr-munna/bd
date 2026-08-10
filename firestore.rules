@@ -228,6 +228,11 @@ service cloud.firestore {
       allow create: if isApproved() || isSignedIn();
       allow delete: if isSupremeAdmin();
     }
+
+    match /system_backups/{backupId} {
+      allow read: if isApproved();
+      allow create, update, delete: if isApproved();
+    }
     
     // Test collection for initial connection validation
     match /test/{docId} {
