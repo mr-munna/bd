@@ -4217,8 +4217,8 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
 
   // Filtering
   const filteredTiles = useMemo(() => {
-    if (!searchQuery.trim()) return [];
     const source = activeTab === 'master_sheet' ? tiles : activeTiles;
+    if (!searchQuery.trim()) return activeTab === 'search' || showSearchBox ? source : [];
     const q = searchQuery.toLowerCase().trim();
     return source.filter(t => 
       (t.name || '').toLowerCase().includes(q) || 
@@ -4230,11 +4230,11 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
       if (cmp !== 0) return cmp;
       return (a.name || '').localeCompare(b.name || '');
     });
-  }, [tiles, activeTiles, searchQuery, activeTab]);
+  }, [tiles, activeTiles, searchQuery, activeTab, showSearchBox]);
 
   const filteredGoods = useMemo(() => {
-    if (!searchQuery.trim()) return [];
     const source = activeTab === 'master_sheet' ? goods : activeGoods;
+    if (!searchQuery.trim()) return activeTab === 'search' || showSearchBox ? source : [];
     const q = searchQuery.toLowerCase().trim();
     return source.filter(g => 
       (g.code || '').toLowerCase().includes(q) || 
@@ -4242,11 +4242,11 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
       (g.type || '').toLowerCase().includes(q) ||
       (g.description || '').toLowerCase().includes(q)
     ).sort(compareGoodTypes);
-  }, [goods, activeGoods, searchQuery, activeTab]);
+  }, [goods, activeGoods, searchQuery, activeTab, showSearchBox]);
 
   const filteredTools = useMemo(() => {
-    if (!searchQuery.trim()) return [];
     const source = activeTab === 'master_sheet' ? tools : activeTools;
+    if (!searchQuery.trim()) return activeTab === 'search' || showSearchBox ? source : [];
     const q = searchQuery.toLowerCase().trim();
     return source.filter(t => 
       (t.description || t.details || '').toLowerCase().includes(q) ||
@@ -4254,13 +4254,13 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
       (t.states || '').toLowerCase().includes(q) ||
       (t.issueToDate || '').toLowerCase().includes(q)
     );
-  }, [tools, activeTools, searchQuery, activeTab]);
+  }, [tools, activeTools, searchQuery, activeTab, showSearchBox]);
 
   const filteredBooked = useMemo(() => {
-    if (!searchQuery.trim()) return [];
+    const source = bookedItems.filter(b => !b.deleted);
+    if (!searchQuery.trim()) return activeTab === 'search' || showSearchBox ? source.filter(b => marketingFilter === 'all' ? true : b.marketingPerson === marketingFilter) : [];
     const q = searchQuery.toLowerCase().trim();
-    return bookedItems.filter(b => {
-      if (b.deleted) return false;
+    return source.filter(b => {
       const matchesSearch = (b.name || '').toLowerCase().includes(q) || 
                             (b.code || '').toLowerCase().includes(q) || 
                             (b.clientName || '').toLowerCase().includes(q) ||
@@ -4268,7 +4268,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
       const matchesMarketing = marketingFilter === 'all' ? true : b.marketingPerson === marketingFilter;
       return matchesSearch && matchesMarketing;
     });
-  }, [bookedItems, searchQuery, marketingFilter]);
+  }, [bookedItems, searchQuery, marketingFilter, activeTab, showSearchBox]);
 
   const rawDisplayTiles = useMemo(() => {
     let source: Tile[];
@@ -4887,7 +4887,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
         <div className={cn(
           "flex-1 flex flex-col min-h-screen transition-all", 
           user && isApproved ? "md:ml-56" : "",
-          user && isApproved ? "pt-16 pb-16 md:pt-0 md:pb-0 h-[100dvh] md:h-auto md:overflow-visible" : ""
+          user && isApproved ? "pt-16 pb-16 md:pt-0 md:pb-0" : ""
         )}>
           {/* Header (Mobile + Desktop User Info) */}
           {user && isApproved && (
