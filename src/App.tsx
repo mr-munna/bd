@@ -6294,6 +6294,21 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   {/* 1. Tiles Cards */}
                   {filteredTiles.map((tile) => {
                     const imgUrl = tile.image || (tile as any).imageUrl;
+                    const calculatedTotalSft = Number(tile.totalSft) || Math.round(((tile.diaBariSft || 0) + (tile.bonorupaSft || 0) + (tile.bananiSft || 0) + (tile.dokhinkhanSft || 0)) * 100) / 100 || 0;
+                    const calculatedTotalPcs = Number(tile.totalPcs) || ((tile.diaBariPcs || 0) + (tile.bonorupaPcs || 0) + (tile.bananiPcs || 0) + (tile.dokhinkhanPcs || 0)) || 0;
+                    
+                    const currentBookings = bookedItems.filter(b => 
+                      !b.deleted && 
+                      b.name && tile.name && 
+                      b.name.trim().toLowerCase() === tile.name.trim().toLowerCase() && 
+                      (b.size || '').trim().toLowerCase() === (tile.size || '').trim().toLowerCase() && 
+                      (b.brand || '').trim().toLowerCase() === (tile.brand || '').trim().toLowerCase()
+                    );
+                    const bookedSft = currentBookings.reduce((sum, b) => sum + (b.qtySft || 0), 0);
+                    const bookedPcs = currentBookings.reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
+                    const availSft = Math.max(0, Math.round((calculatedTotalSft - bookedSft) * 100) / 100);
+                    const availPcs = Math.max(0, Math.round(calculatedTotalPcs - bookedPcs));
+
                     return (
                       <div key={`mob-tile-${tile.id}`} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all space-y-3 relative overflow-hidden">
                         <div className="flex items-center justify-between border-b border-slate-100 pb-2">
@@ -6329,12 +6344,14 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                               {tile.brand && <p>Brand: <strong className="text-slate-800">{tile.brand}</strong></p>}
                             </div>
                             <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                              <span className="text-xs font-black text-blue-900 bg-blue-50 border border-blue-200/80 px-2.5 py-0.5 rounded-lg">
-                                SFT: {tile.totalSft || 0}
+                              <span className="text-xs font-black text-blue-900 bg-blue-50 border border-blue-200/80 px-2.5 py-1 rounded-lg">
+                                Total: {calculatedTotalSft} SFT / {calculatedTotalPcs} PCS
                               </span>
-                              <span className="text-xs font-black text-slate-800 bg-slate-100 border border-slate-200 px-2.5 py-0.5 rounded-lg">
-                                PCS: {tile.totalPcs || 0}
-                              </span>
+                              {bookedSft > 0 && (
+                                <span className="text-xs font-black text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
+                                  Stock: {availSft} SFT ({availPcs} PCS)
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -6359,6 +6376,18 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   {/* 2. Sanitary Goods Cards */}
                   {filteredGoods.map((good) => {
                     const imgUrl = good.image || (good as any).imageUrl;
+                    const calculatedTotalPcs = (good as any).totalPcs !== undefined && (good as any).totalPcs !== null && Number((good as any).totalPcs) > 0
+                      ? Number((good as any).totalPcs)
+                      : ((Number(good.dokhinkhan) || 0) + (Number(good.bonorupa) || 0) + (Number(good.banani) || 0) + (Number((good as any).diabari) || 0) + (Number((good as any).qty) || 0) + (Number((good as any).quantity) || 0));
+
+                    const currentBookings = bookedItems.filter(b => 
+                      !b.deleted && 
+                      b.code && good.code && 
+                      b.code.trim().toLowerCase() === good.code.trim().toLowerCase()
+                    );
+                    const bookedPcs = currentBookings.reduce((sum, b) => sum + (b.qtyPcs || 0), 0);
+                    const availPcs = Math.max(0, Math.round(calculatedTotalPcs - bookedPcs));
+
                     return (
                       <div key={`mob-good-${good.id}`} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all space-y-3 relative overflow-hidden">
                         <div className="flex items-center justify-between border-b border-slate-100 pb-2">
@@ -6393,10 +6422,20 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                               {good.type && <p>Type: <strong className="text-slate-800">{good.type}</strong></p>}
                               {good.brand && <p>Brand: <strong className="text-slate-800">{good.brand}</strong></p>}
                             </div>
-                            <div className="pt-1">
-                              <span className="text-xs font-black text-blue-900 bg-blue-50 border border-blue-200/80 px-2.5 py-0.5 rounded-lg">
-                                Total Qty: {good.totalPcs || 0} PCS
+                            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                              <span className="text-xs font-black text-blue-900 bg-blue-50 border border-blue-200/80 px-2.5 py-1 rounded-lg">
+                                Total Qty: {calculatedTotalPcs} PCS
                               </span>
+                              {bookedPcs > 0 && (
+                                <span className="text-xs font-black text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
+                                  In Stock: {availPcs} PCS
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-slate-500 flex flex-wrap gap-2 pt-0.5">
+                              {Number(good.dokhinkhan) > 0 && <span>D.Khan: <strong className="text-slate-700">{good.dokhinkhan}</strong></span>}
+                              {Number(good.bonorupa) > 0 && <span>Bonorupa: <strong className="text-slate-700">{good.bonorupa}</strong></span>}
+                              {Number(good.banani) > 0 && <span>Banani: <strong className="text-slate-700">{good.banani}</strong></span>}
                             </div>
                           </div>
                         </div>
@@ -6421,6 +6460,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   {/* 3. Barobi Tools Cards */}
                   {filteredTools.map((tool) => {
                     const imgUrl = tool.image || (tool as any).imageUrl;
+                    const toolQty = Number(tool.qty ?? (tool as any).quantity ?? (tool as any).totalPcs ?? (tool as any).count) || 0;
                     return (
                       <div key={`mob-tool-${tool.id}`} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all space-y-3 relative overflow-hidden">
                         <div className="flex items-center justify-between border-b border-slate-100 pb-2">
@@ -6438,7 +6478,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                           {imgUrl ? (
                             <img 
                               src={imgUrl} 
-                              alt={tool.description} 
+                              alt={tool.description || (tool as any).details} 
                               className="w-20 h-20 object-cover rounded-xl border border-slate-200 shadow-xs shrink-0 cursor-zoom-in" 
                               referrerPolicy="no-referrer"
                               onClick={() => setPreviewImage(imgUrl)}
@@ -6450,13 +6490,13 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                           )}
 
                           <div className="flex-1 min-w-0 space-y-1">
-                            <h4 className="text-sm font-bold text-slate-900 leading-tight">{tool.description}</h4>
+                            <h4 className="text-sm font-bold text-slate-900 leading-tight">{tool.description || (tool as any).details}</h4>
                             <div className="text-xs text-slate-500 space-y-0.5">
                               {tool.states && <p>State: <strong className="text-slate-800">{tool.states}</strong></p>}
                             </div>
                             <div className="pt-1">
-                              <span className="text-xs font-black text-amber-900 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-lg">
-                                Quantity: {tool.qty || 0} PCS
+                              <span className="text-xs font-black text-amber-900 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg">
+                                Quantity: {toolQty} PCS
                               </span>
                             </div>
                           </div>
@@ -6466,9 +6506,9 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                           onClick={() => {
                             setActiveTab('master');
                             setMasterSubTab('tools');
-                            setSearchQuery(tool.code || tool.description);
+                            setSearchQuery(tool.code || tool.description || (tool as any).details);
                             setHighlightedRow(tool.id);
-                            showStatus('info', `Navigated to Tools table for: ${tool.description}`);
+                            showStatus('info', `Navigated to Tools table for: ${tool.description || (tool as any).details}`);
                           }}
                           className="w-full py-2.5 px-4 bg-[#0f172a] hover:bg-slate-800 active:scale-98 text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all"
                         >
@@ -6482,6 +6522,8 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                   {/* 4. Booked Items Cards */}
                   {filteredBooked.map((booked) => {
                     const imgUrl = booked.image || (booked as any).imageUrl;
+                    const bookedSftVal = Number(booked.qtySft ?? (booked as any).totalSft) || 0;
+                    const bookedPcsVal = Number(booked.qtyPcs ?? (booked as any).totalPcs ?? (booked as any).qty) || 0;
                     return (
                       <div key={`mob-booked-${booked.id}`} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all space-y-3 relative overflow-hidden">
                         <div className="flex items-center justify-between border-b border-slate-100 pb-2">
@@ -6517,11 +6559,8 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                               {booked.marketingPerson && <p>Marketing: <strong className="text-slate-800">{booked.marketingPerson}</strong></p>}
                             </div>
                             <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                              <span className="text-xs font-black text-purple-900 bg-purple-50 border border-purple-200 px-2.5 py-0.5 rounded-lg">
-                                Booked SFT: {booked.qtySft || 0}
-                              </span>
-                              <span className="text-xs font-black text-slate-800 bg-slate-100 border border-slate-200 px-2.5 py-0.5 rounded-lg">
-                                PCS: {booked.qtyPcs || 0}
+                              <span className="text-xs font-black text-purple-900 bg-purple-50 border border-purple-200 px-2.5 py-1 rounded-lg">
+                                Booked: {bookedSftVal} SFT / {bookedPcsVal} PCS
                               </span>
                             </div>
                           </div>
