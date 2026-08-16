@@ -39,7 +39,8 @@ import {
   ExternalLink,
   Activity,
   ArrowRight,
-  History
+  History,
+  Eye
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import * as XLSX from 'xlsx';
@@ -3012,8 +3013,8 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
     }
   };
 
-  // Automatic daily backup logic for Master Sheet (Runs at midnight or on first load after calendar change)
-  const runDailyAutoBackup = async () => {
+  // Automatic daily backup logic for Master Sheet (Runs when calendar date changes or on first load)
+  const runDailyAutoBackup = async (force: boolean = false) => {
     if (!isApproved || (!isSuperAdmin && !isSupremeAdmin) || isBackingUpRef.current) return;
     const now = new Date();
     // Get YYYY-MM-DD in local time
@@ -3022,47 +3023,65 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
     const day = String(now.getDate()).padStart(2, '0');
     const todayDateStr = `${year}-${month}-${day}`;
 
-    if (autoBackupDateCheckedRef.current === todayDateStr) return;
+    // Calculate total items in memory
+    const totalStateItems = (tiles?.length || 0) + (goods?.length || 0) + (tools?.length || 0) + (bookedItems?.length || 0);
 
-    // Document ID for today's backup in system_backups collection
+    // If state is not loaded yet (all 0 items), wait until onSnapshot populates memory
+    if (!force && totalStateItems === 0) {
+      return;
+    }
+
+    // If we already checked & verified today's backup in state, return early
+    if (!force && autoBackupDateCheckedRef.current === todayDateStr) {
+      const todayDoc = systemBackups.find((b: any) => b.backupDate === todayDateStr);
+      const todayCount = (todayDoc?.data?.tiles?.length || 0) +
+                         (todayDoc?.data?.goods?.length || 0) +
+                         (todayDoc?.data?.tools?.length || 0) +
+                         (todayDoc?.data?.bookedItems?.length || 0);
+      if (todayDoc && todayCount > 0) {
+        return; // Valid non-empty backup exists for today
+      }
+    }
+
     const backupDocId = `backup_${todayDateStr}`;
 
     try {
       isBackingUpRef.current = true;
-      // Check if today's backup already exists
       const backupDocRef = doc(db, 'system_backups', backupDocId);
-      const backupSnap = await getDoc(backupDocRef);
 
-      autoBackupDateCheckedRef.current = todayDateStr;
+      // Check in-memory systemBackups first
+      let needsBackup = false;
+      const existingInState = systemBackups.find((b: any) => b.backupDate === todayDateStr);
+      
+      if (!existingInState || force) {
+        needsBackup = true;
+      } else {
+        const totalInState = (existingInState.data?.tiles?.length || 0) + 
+                             (existingInState.data?.goods?.length || 0) + 
+                             (existingInState.data?.tools?.length || 0) + 
+                             (existingInState.data?.bookedItems?.length || 0);
+        if (totalInState === 0 && totalStateItems > 0) {
+          needsBackup = true;
+        }
+      }
 
-      if (!backupSnap.exists()) {
-        console.log(`[AutoBackup] Creating automatic daily backup for ${todayDateStr}...`);
-
-        // Fetch delivery approvals snapshot
-        const deliverySnapshot = await getDocs(collection(db, 'delivery_approvals'));
-        const deliveryApprovals = deliverySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-
+      if (needsBackup) {
         let masterSheetBackupData: any = {
-          tiles,
-          goods,
-          tools,
-          bookedItems,
-          savedQuotes,
-          deliveryApprovals,
+          tiles: tiles || [],
+          goods: goods || [],
+          tools: tools || [],
+          bookedItems: bookedItems || [],
+          savedQuotes: savedQuotes || [],
+          deliveryApprovals: [],
           backupDate: todayDateStr,
           createdAt: now.toISOString(),
           timestamp: now.getTime()
         };
 
-        // Ensure payload size stays safely under Firestore 1MB document limit (< 900KB)
+        // Compact if necessary to stay well under 1MB Firestore doc limit
         let strData = JSON.stringify(masterSheetBackupData);
         if (strData.length > 900000) {
-          console.warn("[AutoBackup] Backup size nearing 1MB limit. Compacting deliveryApprovals and savedQuotes...");
           masterSheetBackupData.savedQuotes = (savedQuotes || []).slice(0, 50);
-          masterSheetBackupData.deliveryApprovals = (deliveryApprovals || []).slice(0, 50);
         }
 
         // Save today's backup to Firestore
@@ -3073,40 +3092,55 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
           data: masterSheetBackupData
         });
 
-        // Maintain strict 7-day rolling window (delete backups older than 7 records)
-        const allBackupsSnap = await getDocs(collection(db, 'system_backups'));
-        const backupDocs = allBackupsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-        backupDocs.sort((a: any, b: any) => (b.timestamp || 0) - (a.timestamp || 0));
+        autoBackupDateCheckedRef.current = todayDateStr;
+        console.log(`[AutoBackup] Saved daily backup for ${todayDateStr}: ${(tiles || []).length} Tiles, ${(goods || []).length} Goods, ${(tools || []).length} Tools`);
 
-        if (backupDocs.length > 7) {
-          const docsToDelete = backupDocs.slice(7);
+        // Delete old backups beyond 7 records
+        if (systemBackups.length > 7) {
+          const sorted = [...systemBackups].sort((a: any, b: any) => (b.timestamp || 0) - (a.timestamp || 0));
+          const docsToDelete = sorted.slice(7);
           for (const oldDoc of docsToDelete) {
-            console.log(`[AutoBackup] Deleting old backup beyond 7 days limit: ${oldDoc.id}`);
-            await deleteDoc(doc(db, 'system_backups', oldDoc.id));
+            await deleteDoc(doc(db, 'system_backups', oldDoc.id)).catch(() => {});
           }
         }
+
+        if (force) {
+          showStatus('success', `Daily backup generated! (${(tiles || []).length} Tiles, ${(goods || []).length} Goods, ${(tools || []).length} Tools)`);
+        }
+      } else {
+        autoBackupDateCheckedRef.current = todayDateStr;
       }
-    } catch (err) {
-      console.error("[AutoBackup] Failed to check/create automatic daily backup:", err);
+    } catch (err: any) {
+      if (err?.message?.includes('Quota limit exceeded') || err?.code === 'resource-exhausted') {
+        console.warn("[AutoBackup] Firestore free daily quota limit reached.");
+        if (force) {
+          showStatus('error', 'Firestore daily quota reached. Please try again later.');
+        }
+      } else {
+        console.error("[AutoBackup] Failed to check/create automatic daily backup:", err);
+        if (force) {
+          showStatus('error', `Backup failed: ${err.message}`);
+        }
+      }
     } finally {
       isBackingUpRef.current = false;
     }
   };
 
-  // Effect to trigger daily backup check when data/auth is ready, and schedule interval at midnight
+  // Effect to trigger daily backup check when data/auth is ready
   useEffect(() => {
     if (!isAuthReady || !user || !isApproved || (!isSuperAdmin && !isSupremeAdmin)) return;
 
-    // Run immediately when loaded
+    // Run immediately when loaded or state populates
     runDailyAutoBackup();
 
-    // Check periodically every 15 minutes or near midnight
+    // Check periodically every 30 minutes
     const interval = setInterval(() => {
       runDailyAutoBackup();
-    }, 15 * 60 * 1000);
+    }, 30 * 60 * 1000);
 
     return () => clearInterval(interval);
-  }, [isAuthReady, user, isApproved, isSuperAdmin, isSupremeAdmin]);
+  }, [isAuthReady, user, isApproved, isSuperAdmin, isSupremeAdmin, tiles.length, goods.length, tools.length]);
 
   const performDataRestore = async (data: any) => {
     try {
@@ -4189,7 +4223,8 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
     return source.filter(t => 
       (t.name || '').toLowerCase().includes(q) || 
       (t.brand || '').toLowerCase().includes(q) ||
-      (t.size || '').toLowerCase().includes(q)
+      (t.size || '').toLowerCase().includes(q) ||
+      (t.code || '').toLowerCase().includes(q)
     ).sort((a, b) => {
       const cmp = compareTileSizes(a.size, b.size);
       if (cmp !== 0) return cmp;
@@ -4214,11 +4249,26 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
     const source = activeTab === 'master_sheet' ? tools : activeTools;
     const q = searchQuery.toLowerCase().trim();
     return source.filter(t => 
-      (t.details || '').toLowerCase().includes(q) ||
+      (t.description || t.details || '').toLowerCase().includes(q) ||
+      (t.code || '').toLowerCase().includes(q) ||
       (t.states || '').toLowerCase().includes(q) ||
       (t.issueToDate || '').toLowerCase().includes(q)
     );
   }, [tools, activeTools, searchQuery, activeTab]);
+
+  const filteredBooked = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const q = searchQuery.toLowerCase().trim();
+    return bookedItems.filter(b => {
+      if (b.deleted) return false;
+      const matchesSearch = (b.name || '').toLowerCase().includes(q) || 
+                            (b.code || '').toLowerCase().includes(q) || 
+                            (b.clientName || '').toLowerCase().includes(q) ||
+                            (b.marketingPerson || '').toLowerCase().includes(q);
+      const matchesMarketing = marketingFilter === 'all' ? true : b.marketingPerson === marketingFilter;
+      return matchesSearch && matchesMarketing;
+    });
+  }, [bookedItems, searchQuery, marketingFilter]);
 
   const rawDisplayTiles = useMemo(() => {
     let source: Tile[];
@@ -6211,6 +6261,288 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
               emailNotificationsEnabled={emailNotificationsEnabled}
               onToggleEmailNotifications={handleToggleEmailNotifications}
             />
+          )}
+
+          {/* Dedicated Mobile Search Cards View (Only active on Mobile when searching) */}
+          {(activeTab === 'search' || (showSearchBox && searchQuery.trim() !== '')) && (
+            <div className="block md:hidden space-y-4 mb-6 animate-in fade-in slide-in-from-top-2 duration-300">
+              <div className="bg-slate-900 text-white p-3.5 rounded-2xl shadow-lg border border-slate-800 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400">
+                    <Search className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-100">Mobile Product Search Cards</h3>
+                    <p className="text-[10px] text-slate-400">Query: "<span className="text-amber-300 font-semibold">{searchQuery}</span>"</p>
+                  </div>
+                </div>
+                <span className="text-xs font-extrabold bg-amber-500 text-slate-950 px-2.5 py-1 rounded-full shadow-sm">
+                  {filteredTiles.length + filteredGoods.length + filteredTools.length + filteredBooked.length} Found
+                </span>
+              </div>
+
+              {(filteredTiles.length + filteredGoods.length + filteredTools.length + filteredBooked.length === 0) ? (
+                <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center text-slate-500 space-y-2">
+                  <Search className="w-8 h-8 mx-auto text-slate-300" />
+                  <p className="text-sm font-semibold text-slate-700">No matching products found</p>
+                  <p className="text-xs text-slate-400">Try searching with a different product name, code, size, or brand.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3.5">
+                  {/* 1. Tiles Cards */}
+                  {filteredTiles.map((tile) => {
+                    const imgUrl = tile.image || (tile as any).imageUrl;
+                    return (
+                      <div key={`mob-tile-${tile.id}`} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all space-y-3 relative overflow-hidden">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                          <span className="px-2.5 py-0.5 rounded-md text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-200 uppercase tracking-wider flex items-center gap-1">
+                            <Grid3X3 className="w-3 h-3" /> Tile Item
+                          </span>
+                          {tile.code && (
+                            <span className="text-[11px] font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                              Code: {tile.code}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-start gap-3">
+                          {imgUrl ? (
+                            <img 
+                              src={imgUrl} 
+                              alt={tile.name} 
+                              className="w-20 h-20 object-cover rounded-xl border border-slate-200 shadow-xs shrink-0 cursor-zoom-in" 
+                              referrerPolicy="no-referrer"
+                              onClick={() => setPreviewImage(imgUrl)}
+                            />
+                          ) : (
+                            <div className="w-20 h-20 bg-slate-100 rounded-xl flex items-center justify-center border border-slate-200 shrink-0 text-slate-400">
+                              <Grid3X3 className="w-8 h-8" />
+                            </div>
+                          )}
+
+                          <div className="flex-1 min-w-0 space-y-1">
+                            <h4 className="text-sm font-bold text-slate-900 leading-tight">{tile.name}</h4>
+                            <div className="text-xs text-slate-500 space-y-0.5">
+                              {tile.size && <p>Size: <strong className="text-slate-800">{tile.size}</strong></p>}
+                              {tile.brand && <p>Brand: <strong className="text-slate-800">{tile.brand}</strong></p>}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                              <span className="text-xs font-black text-blue-900 bg-blue-50 border border-blue-200/80 px-2.5 py-0.5 rounded-lg">
+                                SFT: {tile.totalSft || 0}
+                              </span>
+                              <span className="text-xs font-black text-slate-800 bg-slate-100 border border-slate-200 px-2.5 py-0.5 rounded-lg">
+                                PCS: {tile.totalPcs || 0}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => {
+                            setActiveTab('master');
+                            setMasterSubTab('tiles');
+                            setSearchQuery(tile.code || tile.name);
+                            setHighlightedRow(tile.id);
+                            showStatus('info', `Navigated to Tiles table for: ${tile.name}`);
+                          }}
+                          className="w-full py-2.5 px-4 bg-[#0f172a] hover:bg-slate-800 active:scale-98 text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all"
+                        >
+                          <Eye className="w-4 h-4 text-amber-400" />
+                          <span>View Details & Full Table (বিস্তারিত দেখুন)</span>
+                        </button>
+                      </div>
+                    );
+                  })}
+
+                  {/* 2. Sanitary Goods Cards */}
+                  {filteredGoods.map((good) => {
+                    const imgUrl = good.image || (good as any).imageUrl;
+                    return (
+                      <div key={`mob-good-${good.id}`} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all space-y-3 relative overflow-hidden">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                          <span className="px-2.5 py-0.5 rounded-md text-[10px] font-extrabold bg-blue-100 text-blue-800 border border-blue-200 uppercase tracking-wider flex items-center gap-1">
+                            <Package className="w-3 h-3" /> Sanitary Item
+                          </span>
+                          {good.code && (
+                            <span className="text-[11px] font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                              Code: {good.code}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-start gap-3">
+                          {imgUrl ? (
+                            <img 
+                              src={imgUrl} 
+                              alt={good.description} 
+                              className="w-20 h-20 object-cover rounded-xl border border-slate-200 shadow-xs shrink-0 cursor-zoom-in" 
+                              referrerPolicy="no-referrer"
+                              onClick={() => setPreviewImage(imgUrl)}
+                            />
+                          ) : (
+                            <div className="w-20 h-20 bg-slate-100 rounded-xl flex items-center justify-center border border-slate-200 shrink-0 text-slate-400">
+                              <Package className="w-8 h-8" />
+                            </div>
+                          )}
+
+                          <div className="flex-1 min-w-0 space-y-1">
+                            <h4 className="text-sm font-bold text-slate-900 leading-tight">{good.description}</h4>
+                            <div className="text-xs text-slate-500 space-y-0.5">
+                              {good.type && <p>Type: <strong className="text-slate-800">{good.type}</strong></p>}
+                              {good.brand && <p>Brand: <strong className="text-slate-800">{good.brand}</strong></p>}
+                            </div>
+                            <div className="pt-1">
+                              <span className="text-xs font-black text-blue-900 bg-blue-50 border border-blue-200/80 px-2.5 py-0.5 rounded-lg">
+                                Total Qty: {good.totalPcs || 0} PCS
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => {
+                            setActiveTab('master');
+                            setMasterSubTab('goods');
+                            setSearchQuery(good.code || good.description);
+                            setHighlightedRow(good.id);
+                            showStatus('info', `Navigated to Sanitary table for: ${good.description}`);
+                          }}
+                          className="w-full py-2.5 px-4 bg-[#0f172a] hover:bg-slate-800 active:scale-98 text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all"
+                        >
+                          <Eye className="w-4 h-4 text-amber-400" />
+                          <span>View Details & Full Table (বিস্তারিত দেখুন)</span>
+                        </button>
+                      </div>
+                    );
+                  })}
+
+                  {/* 3. Barobi Tools Cards */}
+                  {filteredTools.map((tool) => {
+                    const imgUrl = tool.image || (tool as any).imageUrl;
+                    return (
+                      <div key={`mob-tool-${tool.id}`} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all space-y-3 relative overflow-hidden">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                          <span className="px-2.5 py-0.5 rounded-md text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-200 uppercase tracking-wider flex items-center gap-1">
+                            <Wrench className="w-3 h-3" /> Barobi Tool
+                          </span>
+                          {tool.code && (
+                            <span className="text-[11px] font-mono font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                              Code: {tool.code}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-start gap-3">
+                          {imgUrl ? (
+                            <img 
+                              src={imgUrl} 
+                              alt={tool.description} 
+                              className="w-20 h-20 object-cover rounded-xl border border-slate-200 shadow-xs shrink-0 cursor-zoom-in" 
+                              referrerPolicy="no-referrer"
+                              onClick={() => setPreviewImage(imgUrl)}
+                            />
+                          ) : (
+                            <div className="w-20 h-20 bg-slate-100 rounded-xl flex items-center justify-center border border-slate-200 shrink-0 text-slate-400">
+                              <Wrench className="w-8 h-8" />
+                            </div>
+                          )}
+
+                          <div className="flex-1 min-w-0 space-y-1">
+                            <h4 className="text-sm font-bold text-slate-900 leading-tight">{tool.description}</h4>
+                            <div className="text-xs text-slate-500 space-y-0.5">
+                              {tool.states && <p>State: <strong className="text-slate-800">{tool.states}</strong></p>}
+                            </div>
+                            <div className="pt-1">
+                              <span className="text-xs font-black text-amber-900 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-lg">
+                                Quantity: {tool.qty || 0} PCS
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => {
+                            setActiveTab('master');
+                            setMasterSubTab('tools');
+                            setSearchQuery(tool.code || tool.description);
+                            setHighlightedRow(tool.id);
+                            showStatus('info', `Navigated to Tools table for: ${tool.description}`);
+                          }}
+                          className="w-full py-2.5 px-4 bg-[#0f172a] hover:bg-slate-800 active:scale-98 text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all"
+                        >
+                          <Eye className="w-4 h-4 text-amber-400" />
+                          <span>View Details & Full Table (বিস্তারিত দেখুন)</span>
+                        </button>
+                      </div>
+                    );
+                  })}
+
+                  {/* 4. Booked Items Cards */}
+                  {filteredBooked.map((booked) => {
+                    const imgUrl = booked.image || (booked as any).imageUrl;
+                    return (
+                      <div key={`mob-booked-${booked.id}`} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all space-y-3 relative overflow-hidden">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                          <span className="px-2.5 py-0.5 rounded-md text-[10px] font-extrabold bg-purple-100 text-purple-900 border border-purple-200 uppercase tracking-wider flex items-center gap-1">
+                            <FileText className="w-3 h-3" /> Booked Item
+                          </span>
+                          {booked.code && (
+                            <span className="text-[11px] font-mono font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                              Code: {booked.code}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-start gap-3">
+                          {imgUrl ? (
+                            <img 
+                              src={imgUrl} 
+                              alt={booked.name} 
+                              className="w-20 h-20 object-cover rounded-xl border border-slate-200 shadow-xs shrink-0 cursor-zoom-in" 
+                              referrerPolicy="no-referrer"
+                              onClick={() => setPreviewImage(imgUrl)}
+                            />
+                          ) : (
+                            <div className="w-20 h-20 bg-slate-100 rounded-xl flex items-center justify-center border border-slate-200 shrink-0 text-slate-400">
+                              <FileText className="w-8 h-8" />
+                            </div>
+                          )}
+
+                          <div className="flex-1 min-w-0 space-y-1">
+                            <h4 className="text-sm font-bold text-slate-900 leading-tight">{booked.name}</h4>
+                            <div className="text-xs text-slate-500 space-y-0.5">
+                              {booked.clientName && <p>Client: <strong className="text-purple-950 font-bold">{booked.clientName}</strong></p>}
+                              {booked.marketingPerson && <p>Marketing: <strong className="text-slate-800">{booked.marketingPerson}</strong></p>}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                              <span className="text-xs font-black text-purple-900 bg-purple-50 border border-purple-200 px-2.5 py-0.5 rounded-lg">
+                                Booked SFT: {booked.qtySft || 0}
+                              </span>
+                              <span className="text-xs font-black text-slate-800 bg-slate-100 border border-slate-200 px-2.5 py-0.5 rounded-lg">
+                                PCS: {booked.qtyPcs || 0}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => {
+                            setActiveTab('booked');
+                            setSearchQuery(booked.code || booked.name);
+                            setHighlightedRow(booked.id);
+                            showStatus('info', `Navigated to Booked Items table for: ${booked.name}`);
+                          }}
+                          className="w-full py-2.5 px-4 bg-[#0f172a] hover:bg-slate-800 active:scale-98 text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all"
+                        >
+                          <Eye className="w-4 h-4 text-amber-400" />
+                          <span>View Details & Full Table (বিস্তারিত দেখুন)</span>
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           )}
 
           {/* Stock Items Section */}
@@ -9576,12 +9908,21 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     </p>
                   </div>
                 </div>
-                <button 
-                  onClick={() => setShowBackupHistoryModal(false)}
-                  className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => runDailyAutoBackup(true)}
+                    className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-extrabold text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95 shrink-0"
+                    title="Generate or update today's daily backup immediately"
+                  >
+                    <Plus className="w-4 h-4" /> Backup Now
+                  </button>
+                  <button 
+                    onClick={() => setShowBackupHistoryModal(false)}
+                    className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
 
               {/* Body */}
@@ -9591,7 +9932,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                     <History className="w-12 h-12 mx-auto text-slate-600 animate-pulse" />
                     <p className="text-sm font-medium">No automatic backup files available yet.</p>
                     <p className="text-xs text-slate-500">
-                      Backups will automatically generate when the calendar date changes or at midnight.
+                      Backups will automatically generate when the calendar date changes or click "Backup Now" above.
                     </p>
                   </div>
                 ) : (
@@ -9603,15 +9944,18 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                       const totalTools = item.data?.tools?.length || 0;
                       const totalBooked = item.data?.bookedItems?.length || 0;
                       const totalQuotes = item.data?.savedQuotes?.length || 0;
+                      const isEmpty = totalTiles === 0 && totalGoods === 0 && totalTools === 0 && totalBooked === 0;
 
                       return (
                         <div 
                           key={item.id} 
                           className={cn(
                             "p-4 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4",
-                            isToday 
-                              ? "bg-amber-950/20 border-amber-500/40 hover:border-amber-500/70" 
-                              : "bg-slate-800/40 border-slate-700/60 hover:bg-slate-800/80"
+                            isEmpty 
+                              ? "bg-red-950/20 border-red-500/30"
+                              : isToday 
+                                ? "bg-amber-950/20 border-amber-500/40 hover:border-amber-500/70" 
+                                : "bg-slate-800/40 border-slate-700/60 hover:bg-slate-800/80"
                           )}
                         >
                           <div className="space-y-1.5">
@@ -9622,6 +9966,11 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                               {isToday && (
                                 <span className="bg-emerald-500/20 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-500/30">
                                   Today's Backup
+                                </span>
+                              )}
+                              {isEmpty && (
+                                <span className="bg-red-500/20 text-red-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-red-500/30">
+                                  Empty (0 Items)
                                 </span>
                               )}
                               <span className="text-[10px] text-slate-500">
@@ -9645,7 +9994,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                               onClick={() => {
                                 setConfirmAction({
                                   title: 'RESTORE BACKUP RECORD',
-                                  message: `Are you sure you want to restore all data from ${item.backupDate}? This will update current Master Sheet items.`,
+                                  message: `Are you sure you want to restore all data from ${item.backupDate}? (${totalTiles} Tiles, ${totalGoods} Goods, ${totalTools} Tools, ${totalBooked} Booked).`,
                                   type: 'warning',
                                   onConfirm: async () => {
                                     await performDataRestore(item.data);
@@ -9654,7 +10003,11 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                                   }
                                 });
                               }}
-                              className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95"
+                              disabled={isEmpty}
+                              className={cn(
+                                "px-3 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95",
+                                isEmpty ? "bg-slate-800 text-slate-500 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-500 text-white"
+                              )}
                             >
                               <Upload className="w-3.5 h-3.5" /> Restore
                             </button>
@@ -9674,6 +10027,24 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
                               className="px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95"
                             >
                               <Download className="w-3.5 h-3.5" /> Download
+                            </button>
+                            <button
+                              onClick={() => {
+                                setConfirmAction({
+                                  title: 'DELETE BACKUP RECORD',
+                                  message: `Are you sure you want to delete backup from ${item.backupDate}?`,
+                                  type: 'danger',
+                                  onConfirm: async () => {
+                                    await deleteDoc(doc(db, 'system_backups', item.id));
+                                    showStatus('success', `Backup record for ${item.backupDate} deleted.`);
+                                    setConfirmAction(null);
+                                  }
+                                });
+                              }}
+                              className="p-2 rounded-xl text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                              title="Delete backup record"
+                            >
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
                         </div>
