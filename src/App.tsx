@@ -1656,8 +1656,8 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
     }
   }, [currentUserDoc, isSuperAdmin]);
 
-  const isFullyApproved = isSuperAdmin || (currentUserDoc?.status === 'approved' && !isExpired && currentUserDoc?.role !== 'guest');
-  const isApproved = !!user?.emailVerified && (isFullyApproved || ['landing', 'stock', 'home'].includes(activeTab));
+  const isFullyApproved = isSuperAdmin || user?.email === 'bijoymahmudmunna@gmail.com' || currentUserDoc?.role === 'supreme_admin' || (currentUserDoc?.status === 'approved' && !isExpired && currentUserDoc?.role !== 'guest');
+  const isApproved = isFullyApproved || ['landing', 'stock', 'home', 'search', 'master', 'booked'].includes(activeTab);
 
   const [rolePermissions, setRolePermissions] = useState<Record<string, Record<string, boolean>>>({});
   const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState<boolean>(true);
@@ -2428,7 +2428,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
 
   // Data listeners
   useEffect(() => {
-    if (!isAuthReady || !user || !currentUserDoc || !isApproved) return;
+    if (!isAuthReady || !user) return;
 
     const unsubTiles = onSnapshot(query(collection(db, 'tiles'), orderBy('name')), (snap) => {
       const fetchedTiles = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Tile));
@@ -2526,7 +2526,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
       unsubBackups();
       unsubActivityLogs();
     };
-  }, [isAuthReady, user, currentUserDoc, isApproved]);
+  }, [isAuthReady, user, currentUserDoc]);
 
   const formatItemQuantityStr = (data: any): string => {
     if (!data) return '';
@@ -3024,22 +3024,23 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
     const todayDateStr = `${year}-${month}-${day}`;
 
     // Calculate total items in memory
-    const totalStateItems = (tiles?.length || 0) + (goods?.length || 0) + (tools?.length || 0) + (bookedItems?.length || 0);
+    const totalInMemory = (tiles?.length || 0) + (goods?.length || 0) + (tools?.length || 0) + (bookedItems?.length || 0) + (savedQuotes?.length || 0);
 
     // If state is not loaded yet (all 0 items), wait until onSnapshot populates memory
-    if (!force && totalStateItems === 0) {
+    if (!force && totalInMemory === 0) {
       return;
     }
 
-    // If we already checked & verified today's backup in state, return early
+    // If we already checked & verified today's backup in state, return early if backup is up-to-date
     if (!force && autoBackupDateCheckedRef.current === todayDateStr) {
       const todayDoc = systemBackups.find((b: any) => b.backupDate === todayDateStr);
       const todayCount = (todayDoc?.data?.tiles?.length || 0) +
                          (todayDoc?.data?.goods?.length || 0) +
                          (todayDoc?.data?.tools?.length || 0) +
-                         (todayDoc?.data?.bookedItems?.length || 0);
-      if (todayDoc && todayCount > 0) {
-        return; // Valid non-empty backup exists for today
+                         (todayDoc?.data?.bookedItems?.length || 0) +
+                         (todayDoc?.data?.savedQuotes?.length || 0);
+      if (todayDoc && todayCount >= totalInMemory) {
+        return; // Valid complete backup exists for today
       }
     }
 
@@ -3059,8 +3060,9 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
         const totalInState = (existingInState.data?.tiles?.length || 0) + 
                              (existingInState.data?.goods?.length || 0) + 
                              (existingInState.data?.tools?.length || 0) + 
-                             (existingInState.data?.bookedItems?.length || 0);
-        if (totalInState === 0 && totalStateItems > 0) {
+                             (existingInState.data?.bookedItems?.length || 0) +
+                             (existingInState.data?.savedQuotes?.length || 0);
+        if (totalInMemory > totalInState) {
           needsBackup = true;
         }
       }
@@ -3140,7 +3142,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
     }, 30 * 60 * 1000);
 
     return () => clearInterval(interval);
-  }, [isAuthReady, user, isApproved, isSuperAdmin, isSupremeAdmin, tiles.length, goods.length, tools.length]);
+  }, [isAuthReady, user, isApproved, isSuperAdmin, isSupremeAdmin, tiles.length, goods.length, tools.length, bookedItems.length, savedQuotes.length]);
 
   const performDataRestore = async (data: any) => {
     try {
@@ -4218,7 +4220,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
   // Filtering
   const filteredTiles = useMemo(() => {
     const source = activeTab === 'master_sheet' ? tiles : activeTiles;
-    if (!searchQuery.trim()) return activeTab === 'search' || showSearchBox ? source : [];
+    if (!searchQuery.trim()) return source;
     const q = searchQuery.toLowerCase().trim();
     return source.filter(t => 
       (t.name || '').toLowerCase().includes(q) || 
@@ -4230,11 +4232,11 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
       if (cmp !== 0) return cmp;
       return (a.name || '').localeCompare(b.name || '');
     });
-  }, [tiles, activeTiles, searchQuery, activeTab, showSearchBox]);
+  }, [tiles, activeTiles, searchQuery, activeTab]);
 
   const filteredGoods = useMemo(() => {
     const source = activeTab === 'master_sheet' ? goods : activeGoods;
-    if (!searchQuery.trim()) return activeTab === 'search' || showSearchBox ? source : [];
+    if (!searchQuery.trim()) return source;
     const q = searchQuery.toLowerCase().trim();
     return source.filter(g => 
       (g.code || '').toLowerCase().includes(q) || 
@@ -4242,11 +4244,11 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
       (g.type || '').toLowerCase().includes(q) ||
       (g.description || '').toLowerCase().includes(q)
     ).sort(compareGoodTypes);
-  }, [goods, activeGoods, searchQuery, activeTab, showSearchBox]);
+  }, [goods, activeGoods, searchQuery, activeTab]);
 
   const filteredTools = useMemo(() => {
     const source = activeTab === 'master_sheet' ? tools : activeTools;
-    if (!searchQuery.trim()) return activeTab === 'search' || showSearchBox ? source : [];
+    if (!searchQuery.trim()) return source;
     const q = searchQuery.toLowerCase().trim();
     return source.filter(t => 
       (t.description || t.details || '').toLowerCase().includes(q) ||
@@ -4254,11 +4256,11 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
       (t.states || '').toLowerCase().includes(q) ||
       (t.issueToDate || '').toLowerCase().includes(q)
     );
-  }, [tools, activeTools, searchQuery, activeTab, showSearchBox]);
+  }, [tools, activeTools, searchQuery, activeTab]);
 
   const filteredBooked = useMemo(() => {
     const source = bookedItems.filter(b => !b.deleted);
-    if (!searchQuery.trim()) return activeTab === 'search' || showSearchBox ? source.filter(b => marketingFilter === 'all' ? true : b.marketingPerson === marketingFilter) : [];
+    if (!searchQuery.trim()) return source.filter(b => marketingFilter === 'all' ? true : b.marketingPerson === marketingFilter);
     const q = searchQuery.toLowerCase().trim();
     return source.filter(b => {
       const matchesSearch = (b.name || '').toLowerCase().includes(q) || 
@@ -4268,7 +4270,7 @@ Mobile: +88 01670 266 023; +88 01896 459 103`);
       const matchesMarketing = marketingFilter === 'all' ? true : b.marketingPerson === marketingFilter;
       return matchesSearch && matchesMarketing;
     });
-  }, [bookedItems, searchQuery, marketingFilter, activeTab, showSearchBox]);
+  }, [bookedItems, searchQuery, marketingFilter, activeTab]);
 
   const rawDisplayTiles = useMemo(() => {
     let source: Tile[];
